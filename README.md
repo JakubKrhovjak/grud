@@ -1,6 +1,19 @@
-# Student Management REST API
+# University Management Microservices
 
-REST API pro správu studentů univerzity s PostgreSQL databází a Bun ORM.
+Mikroservisní architektura pro správu univerzity s PostgreSQL databázemi a Bun ORM.
+
+## Architektura
+
+Projekt se skládá ze dvou samostatných mikroservisů:
+
+1. **student-service** - správa studentů
+2. **project-service** - správa projektů
+
+Každý mikroservis má:
+- Vlastní PostgreSQL databázi
+- Vlastní API server
+- Nezávislý deployment
+- Domain-Driven Design (DDD) strukturu
 
 ## Technologie
 
@@ -8,116 +21,63 @@ REST API pro správu studentů univerzity s PostgreSQL databází a Bun ORM.
 - PostgreSQL 16
 - Bun ORM
 - Gorilla Mux (HTTP router)
-- Zap Logger (strukturované logování)
+- Zap/Slog Logger (strukturované logování)
 - Docker & Docker Compose
 
-## Architektura
+## Služby
 
-Projekt používá **Domain-Driven Design (DDD)** strukturu:
+### Student Service
+- Port: `8080`
+- Databáze: `university` (port `5439`)
+- Endpointy: `/api/students`
+
+### Project Service
+- Port: `8081`
+- Databáze: `projects` (port `5440`)
+- Endpointy: `/api/projects`
+
+## Struktura projektu
 
 ```
 grud/
-├── cmd/
-│   └── server/
-│       └── main.go              # Entry point s graceful shutdown
+├── student-service/
+│   ├── cmd/
+│   │   └── server/
+│   │       └── main.go
+│   ├── internal/
+│   │   ├── config/
+│   │   ├── db/
+│   │   ├── logger/
+│   │   ├── student/
+│   │   │   ├── model.go
+│   │   │   ├── repository.go
+│   │   │   ├── service.go
+│   │   │   └── http.go
+│   │   └── app/
+│   ├── go.mod
+│   └── Dockerfile
 │
-├── internal/
-│   ├── config/
-│   │   └── config.go            # Konfigurace aplikace
-│   │
-│   ├── db/
-│   │   └── db.go                # Databázové připojení a migrace
-│   │
-│   ├── logger/
-│   │   └── logger.go            # Zap logger konfigurace
-│   │
-│   ├── student/                 # STUDENT DOMÉNA
-│   │   ├── model.go             # Student entity
-│   │   ├── repository.go        # DB operace
-│   │   ├── service.go           # Business logika s logováním
-│   │   └── http.go              # HTTP handlers
-│   │
-│   └── app/
-│       └── app.go               # Bootstrap aplikace
+├── project-service/
+│   ├── cmd/
+│   │   └── server/
+│   │       └── main.go
+│   ├── internal/
+│   │   ├── config/
+│   │   ├── db/
+│   │   ├── logger/
+│   │   ├── project/
+│   │   │   ├── model.go
+│   │   │   ├── repository.go
+│   │   │   ├── service.go
+│   │   │   └── http.go
+│   │   └── app/
+│   ├── go.mod
+│   └── Dockerfile
 │
-├── go.mod
-├── Dockerfile
-└── docker-compose.yml
+├── docker-compose.yml
+├── go.work
+└── README.md
 ```
-
-### Výhody této architektury:
-
-- **Separation of Concerns** - každá vrstva má svou zodpovědnost
-- **Testovatelnost** - snadné mockování interfaces
-- **Škálovatelnost** - snadné přidávání nových domén
-- **Maintainability** - čistý a přehledný kód
-- **Professional** - standard pro enterprise projekty
-
-## Student Model
-
-```json
-{
-  "id": 1,
-  "first_name": "Jan",
-  "last_name": "Novák",
-  "email": "jan.novak@university.cz",
-  "major": "Computer Science",
-  "year": 2
-}
-```
-
-## API Endpointy
-
-### Vytvořit studenta
-```bash
-POST /api/students
-Content-Type: application/json
-
-{
-  "first_name": "Jan",
-  "last_name": "Novák",
-  "email": "jan.novak@university.cz",
-  "major": "Computer Science",
-  "year": 2
-}
-```
-
-### Získat všechny studenty
-```bash
-GET /api/students
-```
-
-### Získat studenta podle ID
-```bash
-GET /api/students/{id}
-```
-
-### Aktualizovat studenta
-```bash
-PUT /api/students/{id}
-Content-Type: application/json
-
-{
-  "first_name": "Jan",
-  "last_name": "Novák",
-  "email": "jan.novak@university.cz",
-  "major": "Software Engineering",
-  "year": 3
-}
-```
-
-### Smazat studenta
-```bash
-DELETE /api/students/{id}
-```
-
-## Validace
-
-Service vrstva obsahuje validaci:
-- First name a last name jsou povinné
-- Email musí být validní formát
-- Year musí být mezi 0-10
-- Email musí být unikátní (DB constraint)
 
 ## Instalace a spuštění
 
@@ -125,17 +85,17 @@ Service vrstva obsahuje validaci:
 - Docker
 - Docker Compose
 
-### Spuštění s Docker Compose
+### Spuštění všech služeb
 
 ```bash
 docker-compose up -d
 ```
 
-Tento příkaz:
-- Stáhne PostgreSQL 16 Alpine image
-- Vytvoří databázi `university` na portu 5439
-- Sestaví a spustí Go API na portu 8080
-- Automaticky provede migrace (vytvoří tabulku `students`)
+Tento příkaz spustí:
+- PostgreSQL databázi pro studenty (port 5439)
+- PostgreSQL databázi pro projekty (port 5440)
+- Student API (port 8080)
+- Project API (port 8081)
 
 ### Kontrola běžících služeb
 
@@ -149,11 +109,15 @@ docker-compose ps
 # Všechny služby
 docker-compose logs -f
 
-# Pouze API
-docker-compose logs -f api
+# Pouze student-service
+docker-compose logs -f student_api
 
-# Pouze databáze
+# Pouze project-service
+docker-compose logs -f project_api
+
+# Databáze
 docker-compose logs -f postgres
+docker-compose logs -f postgres_projects
 ```
 
 ### Zastavení služeb
@@ -168,158 +132,220 @@ docker-compose down
 docker-compose down -v
 ```
 
-## Lokální vývoj (bez Dockeru)
+## Student Service API
 
-### Předpoklady
-- Go 1.25+
-- PostgreSQL
-
-### Instalace závislostí
-
-```bash
-go mod download
+### Student Model
+```json
+{
+  "id": 1,
+  "first_name": "Jan",
+  "last_name": "Novák",
+  "email": "jan.novak@university.cz",
+  "major": "Computer Science",
+  "year": 2
+}
 ```
 
-### Nastavení proměnných prostředí
+### Endpointy
+
+#### Vytvořit studenta
+```bash
+POST http://localhost:8080/api/students
+Content-Type: application/json
+
+{
+  "first_name": "Jan",
+  "last_name": "Novák",
+  "email": "jan.novak@university.cz",
+  "major": "Computer Science",
+  "year": 2
+}
+```
+
+#### Získat všechny studenty
+```bash
+GET http://localhost:8080/api/students
+```
+
+#### Získat studenta podle ID
+```bash
+GET http://localhost:8080/api/students/{id}
+```
+
+#### Aktualizovat studenta
+```bash
+PUT http://localhost:8080/api/students/{id}
+Content-Type: application/json
+
+{
+  "first_name": "Jan",
+  "last_name": "Novák",
+  "email": "jan.novak@university.cz",
+  "major": "Software Engineering",
+  "year": 3
+}
+```
+
+#### Smazat studenta
+```bash
+DELETE http://localhost:8080/api/students/{id}
+```
+
+## Project Service API
+
+### Project Model
+```json
+{
+  "id": 1,
+  "name": "Web Application",
+  "description": "Modern web app with Go backend",
+  "status": "in_progress",
+  "start_date": "2024-01-15T00:00:00Z",
+  "end_date": null
+}
+```
+
+### Endpointy
+
+#### Vytvořit projekt
+```bash
+POST http://localhost:8081/api/projects
+Content-Type: application/json
+
+{
+  "name": "Web Application",
+  "description": "Modern web app with Go backend",
+  "status": "in_progress",
+  "start_date": "2024-01-15T00:00:00Z"
+}
+```
+
+#### Získat všechny projekty
+```bash
+GET http://localhost:8081/api/projects
+```
+
+#### Získat projekt podle ID
+```bash
+GET http://localhost:8081/api/projects/{id}
+```
+
+#### Aktualizovat projekt
+```bash
+PUT http://localhost:8081/api/projects/{id}
+Content-Type: application/json
+
+{
+  "name": "Web Application",
+  "description": "Updated description",
+  "status": "completed",
+  "start_date": "2024-01-15T00:00:00Z",
+  "end_date": "2024-03-20T00:00:00Z"
+}
+```
+
+#### Smazat projekt
+```bash
+DELETE http://localhost:8081/api/projects/{id}
+```
+
+## Lokální vývoj (bez Dockeru)
+
+### Student Service
 
 ```bash
+cd student-service
+go mod download
 export DB_HOST=localhost
 export DB_PORT=5439
 export DB_USER=postgres
 export DB_PASSWORD=postgres
 export DB_NAME=university
 export PORT=8080
-```
-
-### Spuštění PostgreSQL
-
-```bash
-docker run --name postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=university -p 5439:5432 -d postgres:16-alpine
-```
-
-### Spuštění aplikace
-
-```bash
 go run cmd/server/main.go
 ```
 
-### Build
+### Project Service
 
 ```bash
-go build -o server cmd/server/main.go
-./server
+cd project-service
+go mod download
+export DB_HOST=localhost
+export DB_PORT=5440
+export DB_USER=postgres
+export DB_PASSWORD=postgres
+export DB_NAME=projects
+export PORT=8081
+go run cmd/server/main.go
 ```
 
-## Testování API
+## Go Workspace
 
-### Pomocí curl
+Projekt používá Go workspace pro práci s více moduly:
 
-#### Vytvořit studenta
 ```bash
-curl -X POST http://localhost:8080/api/students \
-  -H "Content-Type: application/json" \
-  -d '{
-    "first_name": "Jan",
-    "last_name": "Novák",
-    "email": "jan.novak@university.cz",
-    "major": "Computer Science",
-    "year": 2
-  }'
+# Aktualizace workspace
+go work sync
+
+# Sestavení všech služeb
+go work use ./student-service ./project-service
 ```
 
-#### Získat všechny studenty
+## Výhody mikroservisní architektury
+
+- **Nezávislý deployment** - každá služba může být nasazena samostatně
+- **Škálovatelnost** - služby lze škálovat nezávisle dle potřeby
+- **Technologická svoboda** - každá služba může použít jiné technologie
+- **Izolace chyb** - selhání jedné služby neovlivní ostatní
+- **Týmová autonomie** - různé týmy mohou pracovat na různých službách
+- **Database per Service** - každá služba má vlastní databázi
+
+## Přímý přístup k databázím
+
+### Student Database
 ```bash
-curl http://localhost:8080/api/students
+docker exec -it university_db psql -U postgres -d university
 ```
 
-#### Získat studenta podle ID
+### Project Database
 ```bash
-curl http://localhost:8080/api/students/1
+docker exec -it projects_db psql -U postgres -d projects
 ```
 
-#### Aktualizovat studenta
-```bash
-curl -X PUT http://localhost:8080/api/students/1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "first_name": "Jan",
-    "last_name": "Novák",
-    "email": "jan.novak@university.cz",
-    "major": "Software Engineering",
-    "year": 3
-  }'
-```
+## Domain-Driven Design
 
-#### Smazat studenta
-```bash
-curl -X DELETE http://localhost:8080/api/students/1
-```
+Každý mikroservis používá DDD strukturu:
 
-## Konfigurace
-
-Aplikace používá proměnné prostředí pro konfiguraci:
-
-| Proměnná | Výchozí hodnota | Popis |
-|----------|----------------|-------|
-| DB_HOST | localhost | Hostname PostgreSQL |
-| DB_PORT | 5439 | Port PostgreSQL |
-| DB_USER | postgres | Databázový uživatel |
-| DB_PASSWORD | postgres | Databázové heslo |
-| DB_NAME | university | Název databáze |
-| PORT | 8080 | Port API serveru |
-| ENV | development | Environment (development/production) |
-
-## Domain Layers
-
-### Model (model.go)
-- Definice entity Student
+### Model Layer
+- Definice entit
 - Bun tagy pro ORM mapping
 - JSON tagy pro API response
 
-### Repository (repository.go)
+### Repository Layer
 - Interface pro DB operace
 - CRUD metody s Bun ORM
-- Vrací Go errors (sql.ErrNoRows)
+- Vrací Go errors
 
-### Service (service.go)
+### Service Layer
 - Business logika
 - Validace vstupů
 - Error handling
-- Transformace repository errors na domain errors
-- **Strukturované logování** každé operace (Zap)
+- Strukturované logování
 
-### HTTP (http.go)
+### HTTP Layer
 - REST handlers
 - Request/Response mapping
 - HTTP status codes
-- Error responses
 
-## Error Handling
+## Best Practices
 
-Aplikace používá vrstvené error handling:
-- **Repository**: vrací database errors
-- **Service**: transformuje na domain errors (ErrStudentNotFound, ErrInvalidInput)
-- **HTTP**: mapuje na HTTP status codes (404, 400, 500)
-
-## Graceful Shutdown
-
-Aplikace podporuje graceful shutdown:
-- Catch SIGINT/SIGTERM signály
-- 10 sekundový timeout pro dokončení požadavků
-- Bezpečné uzavření databázového spojení
-
-## Přidání nové domény
-
-Pro přidání nové domény (např. `book`):
-
-1. Vytvoř adresář `internal/book/`
-2. Vytvoř soubory:
-   - `model.go` - definice entity
-   - `repository.go` - DB operace
-   - `service.go` - business logika
-   - `http.go` - HTTP handlers
-3. Zaregistruj v `internal/app/app.go`
-4. Přidej migrace do `db.RunMigrations()`
+1. **Dependency Injection** - dependencies jsou injectované přes konstruktory
+2. **Interface segregation** - každá vrstva definuje své interface
+3. **Error wrapping** - použití `fmt.Errorf` s `%w`
+4. **Context propagation** - context.Context v každé metodě
+5. **Validation** - validace na service vrstvě
+6. **Structured logging** - strukturované logování pro monitoring
+7. **Graceful shutdown** - bezpečné ukončení služeb
 
 ## Troubleshooting
 
@@ -327,97 +353,22 @@ Pro přidání nové domény (např. `book`):
 
 ```bash
 docker-compose logs postgres
+docker-compose logs postgres_projects
 ```
 
 ### Port již používán
 
-Změň port v `docker-compose.yml`:
-```yaml
-ports:
-  - "5440:5432"  # Pro PostgreSQL
-  - "8081:8080"  # Pro API
-```
+Změň porty v `docker-compose.yml`
 
-### Rebuild Docker image
+### Rebuild Docker images
 
 ```bash
 docker-compose up -d --build
 ```
 
-## Přímý přístup k databázi
+### Reset databází
 
 ```bash
-docker exec -it university_db psql -U postgres -d university
+docker-compose down -v
+docker-compose up -d
 ```
-
-SQL příkazy:
-```sql
--- Zobrazit všechny studenty
-SELECT * FROM students;
-
--- Vytvořit studenta
-INSERT INTO students (first_name, last_name, email, major, year)
-VALUES ('Jan', 'Novák', 'jan@example.com', 'CS', 2);
-
--- Smazat všechny studenty
-TRUNCATE TABLE students RESTART IDENTITY;
-```
-
-## Logování
-
-Aplikace používá **Zap logger** od Uberu pro strukturované logování.
-
-### Konfigurace Loggeru
-
-- **Development mode** (výchozí): barevný výstup, debug úroveň, čitelný formát
-- **Production mode** (ENV=production): JSON formát, optimalizováno pro výkon
-
-### Co se loguje
-
-Service vrstva loguje každou operaci:
-
-- **Info**: úspěšné operace
-  - Vytvoření studenta s emailem a ID
-  - Načtení studentů (včetně počtu)
-  - Update a delete operace
-
-- **Warn**: validační chyby, neexistující záznamy
-  - Neplatné ID
-  - Student nebyl nalezen
-
-- **Error**: databázové chyby, validační selhání
-  - Chyby při komunikaci s DB
-  - Validační chyby při vytváření/updatu
-
-### Příklad logů
-
-```json
-{
-  "level": "info",
-  "timestamp": "2024-01-15T14:30:00.123Z",
-  "caller": "student/service.go:39",
-  "msg": "creating student",
-  "email": "jan.novak@university.cz",
-  "first_name": "Jan",
-  "last_name": "Novák"
-}
-
-{
-  "level": "info",
-  "timestamp": "2024-01-15T14:30:00.456Z",
-  "caller": "student/service.go:61",
-  "msg": "student created successfully",
-  "id": 1,
-  "email": "jan.novak@university.cz"
-}
-```
-
-## Best Practices
-
-1. **Dependency Injection** - všechny dependencies jsou injectované přes konstruktory
-2. **Interface segregation** - každá vrstva definuje své interface
-3. **Error wrapping** - použití `fmt.Errorf` s `%w` pro error wrapping
-4. **Context propagation** - context.Context je předáván přes všechny vrstvy
-5. **Validation** - validace na service vrstvě, ne v handleru
-6. **Separation of concerns** - každá vrstva má svou zodpovědnost
-7. **Structured logging** - Zap logger pro strukturované a výkonné logování
