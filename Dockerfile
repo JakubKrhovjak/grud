@@ -13,9 +13,14 @@ FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
 
-COPY --from=builder /app/server .
+WORKDIR /home/appuser
+
+COPY --from=builder --chown=appuser:appuser /app/server .
+
+USER appuser
 
 EXPOSE 8080
 
