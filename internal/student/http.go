@@ -3,6 +3,7 @@ package student
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -13,12 +14,14 @@ import (
 type Handler struct {
 	service  Service
 	validate *validator.Validate
+	logger   *slog.Logger
 }
 
-func NewHandler(service Service) *Handler {
+func NewHandler(service Service, logger *slog.Logger) *Handler {
 	return &Handler{
 		service:  service,
 		validate: validator.New(),
+		logger:   logger,
 	}
 }
 
@@ -42,7 +45,10 @@ func (h *Handler) CreateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("creating student", "email", student.Email)
+
 	if err := h.service.CreateStudent(r.Context(), &student); err != nil {
+		h.logger.Error("failed to create student", "email", student.Email)
 		if errors.Is(err, ErrInvalidInput) {
 			respondWithError(w, http.StatusBadRequest, err.Error())
 			return
@@ -51,16 +57,21 @@ func (h *Handler) CreateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("student created successfully", "email", student.Email)
 	respondWithJSON(w, http.StatusCreated, student)
 }
 
 func (h *Handler) GetAllStudents(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("fetching all students")
+
 	students, err := h.service.GetAllStudents(r.Context())
 	if err != nil {
+		h.logger.Error("failed to fetch students")
 		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	h.logger.Info("students fetched successfully")
 	respondWithJSON(w, http.StatusOK, students)
 }
 
@@ -72,16 +83,25 @@ func (h *Handler) GetStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("fetching student by ID")
+
 	student, err := h.service.GetStudentByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrStudentNotFound) {
+			h.logger.Info("student not found")
 			respondWithError(w, http.StatusNotFound, "Student not found")
 			return
 		}
+		if errors.Is(err, ErrInvalidInput) {
+			respondWithError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		h.logger.Error("failed to fetch student")
 		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	h.logger.Info("student fetched successfully", "email", student.Email)
 	respondWithJSON(w, http.StatusOK, student)
 }
 
@@ -105,7 +125,10 @@ func (h *Handler) UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("updating student", "email", student.Email)
+
 	if err := h.service.UpdateStudent(r.Context(), &student); err != nil {
+		h.logger.Error("failed to update student", "email", student.Email)
 		if errors.Is(err, ErrStudentNotFound) {
 			respondWithError(w, http.StatusNotFound, "Student not found")
 			return
@@ -118,6 +141,7 @@ func (h *Handler) UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("student updated successfully", "email", student.Email)
 	respondWithJSON(w, http.StatusOK, student)
 }
 
@@ -129,15 +153,23 @@ func (h *Handler) DeleteStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("deleting student")
+
 	if err := h.service.DeleteStudent(r.Context(), id); err != nil {
+		h.logger.Error("failed to delete student")
 		if errors.Is(err, ErrStudentNotFound) {
 			respondWithError(w, http.StatusNotFound, "Student not found")
+			return
+		}
+		if errors.Is(err, ErrInvalidInput) {
+			respondWithError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	h.logger.Info("student deleted successfully")
 	w.WriteHeader(http.StatusNoContent)
 }
 

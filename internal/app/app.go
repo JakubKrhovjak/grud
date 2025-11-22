@@ -43,8 +43,8 @@ func New() *App {
 	}
 
 	studentRepo := student.NewRepository(database)
-	studentService := student.NewService(studentRepo, slogLogger)
-	studentHandler := student.NewHandler(studentService)
+	studentService := student.NewService(studentRepo)
+	studentHandler := student.NewHandler(studentService, slogLogger)
 	studentHandler.RegisterRoutes(app.router)
 
 	slogLogger.Info("application initialized successfully")
