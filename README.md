@@ -1,42 +1,42 @@
 # University Management Microservices
 
-Mikroservisní architektura pro správu univerzity s PostgreSQL databázemi a Bun ORM.
+Microservice architecture for university management with PostgreSQL databases and Bun ORM.
 
-## Architektura
+## Architecture
 
-Projekt se skládá ze dvou samostatných mikroservisů:
+The project consists of two independent microservices:
 
-1. **student-service** - správa studentů
-2. **project-service** - správa projektů
+1. **student-service** - student management
+2. **project-service** - project management
 
-Každý mikroservis má:
-- Vlastní PostgreSQL databázi
-- Vlastní API server
-- Nezávislý deployment
-- Domain-Driven Design (DDD) strukturu
+Each microservice has:
+- Its own PostgreSQL database
+- Its own API server
+- Independent deployment
+- Domain-Driven Design (DDD) structure
 
-## Technologie
+## Technologies
 
 - Go 1.25
 - PostgreSQL 16
 - Bun ORM
 - Gorilla Mux (HTTP router)
-- Zap/Slog Logger (strukturované logování)
+- Zap/Slog Logger (structured logging)
 - Docker & Docker Compose
 
-## Služby
+## Services
 
 ### Student Service
 - Port: `8080`
-- Databáze: `university` (port `5439`)
-- Endpointy: `/api/students`
+- Database: `university` (port `5439`)
+- Endpoints: `/api/students`
 
 ### Project Service
 - Port: `8081`
-- Databáze: `projects` (port `5440`)
-- Endpointy: `/api/projects`
+- Database: `projects` (port `5440`)
+- Endpoints: `/api/projects`
 
-## Struktura projektu
+## Project Structure
 
 ```
 grud/
@@ -79,54 +79,54 @@ grud/
 └── README.md
 ```
 
-## Instalace a spuštění
+## Installation and Setup
 
-### Předpoklady
+### Prerequisites
 - Docker
 - Docker Compose
 
-### Spuštění všech služeb
+### Start All Services
 
 ```bash
 docker-compose up -d
 ```
 
-Tento příkaz spustí:
-- PostgreSQL databázi pro studenty (port 5439)
-- PostgreSQL databázi pro projekty (port 5440)
+This command starts:
+- PostgreSQL database for students (port 5439)
+- PostgreSQL database for projects (port 5440)
 - Student API (port 8080)
 - Project API (port 8081)
 
-### Kontrola běžících služeb
+### Check Running Services
 
 ```bash
 docker-compose ps
 ```
 
-### Zobrazení logů
+### View Logs
 
 ```bash
-# Všechny služby
+# All services
 docker-compose logs -f
 
-# Pouze student-service
+# Student service only
 docker-compose logs -f student_api
 
-# Pouze project-service
+# Project service only
 docker-compose logs -f project_api
 
-# Databáze
+# Databases
 docker-compose logs -f postgres
 docker-compose logs -f postgres_projects
 ```
 
-### Zastavení služeb
+### Stop Services
 
 ```bash
 docker-compose down
 ```
 
-### Zastavení a smazání dat
+### Stop and Remove Data
 
 ```bash
 docker-compose down -v
@@ -138,55 +138,55 @@ docker-compose down -v
 ```json
 {
   "id": 1,
-  "first_name": "Jan",
-  "last_name": "Novák",
-  "email": "jan.novak@university.cz",
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john.doe@university.com",
   "major": "Computer Science",
   "year": 2
 }
 ```
 
-### Endpointy
+### Endpoints
 
-#### Vytvořit studenta
+#### Create Student
 ```bash
 POST http://localhost:8080/api/students
 Content-Type: application/json
 
 {
-  "first_name": "Jan",
-  "last_name": "Novák",
-  "email": "jan.novak@university.cz",
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john.doe@university.com",
   "major": "Computer Science",
   "year": 2
 }
 ```
 
-#### Získat všechny studenty
+#### Get All Students
 ```bash
 GET http://localhost:8080/api/students
 ```
 
-#### Získat studenta podle ID
+#### Get Student by ID
 ```bash
 GET http://localhost:8080/api/students/{id}
 ```
 
-#### Aktualizovat studenta
+#### Update Student
 ```bash
 PUT http://localhost:8080/api/students/{id}
 Content-Type: application/json
 
 {
-  "first_name": "Jan",
-  "last_name": "Novák",
-  "email": "jan.novak@university.cz",
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john.doe@university.com",
   "major": "Software Engineering",
   "year": 3
 }
 ```
 
-#### Smazat studenta
+#### Delete Student
 ```bash
 DELETE http://localhost:8080/api/students/{id}
 ```
@@ -205,9 +205,9 @@ DELETE http://localhost:8080/api/students/{id}
 }
 ```
 
-### Endpointy
+### Endpoints
 
-#### Vytvořit projekt
+#### Create Project
 ```bash
 POST http://localhost:8081/api/projects
 Content-Type: application/json
@@ -220,17 +220,17 @@ Content-Type: application/json
 }
 ```
 
-#### Získat všechny projekty
+#### Get All Projects
 ```bash
 GET http://localhost:8081/api/projects
 ```
 
-#### Získat projekt podle ID
+#### Get Project by ID
 ```bash
 GET http://localhost:8081/api/projects/{id}
 ```
 
-#### Aktualizovat projekt
+#### Update Project
 ```bash
 PUT http://localhost:8081/api/projects/{id}
 Content-Type: application/json
@@ -244,12 +244,12 @@ Content-Type: application/json
 }
 ```
 
-#### Smazat projekt
+#### Delete Project
 ```bash
 DELETE http://localhost:8081/api/projects/{id}
 ```
 
-## Lokální vývoj (bez Dockeru)
+## Local Development (without Docker)
 
 ### Student Service
 
@@ -281,26 +281,26 @@ go run cmd/server/main.go
 
 ## Go Workspace
 
-Projekt používá Go workspace pro práci s více moduly:
+The project uses Go workspace for working with multiple modules:
 
 ```bash
-# Aktualizace workspace
+# Update workspace
 go work sync
 
-# Sestavení všech služeb
+# Build all services
 go work use ./student-service ./project-service
 ```
 
-## Výhody mikroservisní architektury
+## Microservices Architecture Benefits
 
-- **Nezávislý deployment** - každá služba může být nasazena samostatně
-- **Škálovatelnost** - služby lze škálovat nezávisle dle potřeby
-- **Technologická svoboda** - každá služba může použít jiné technologie
-- **Izolace chyb** - selhání jedné služby neovlivní ostatní
-- **Týmová autonomie** - různé týmy mohou pracovat na různých službách
-- **Database per Service** - každá služba má vlastní databázi
+- **Independent Deployment** - each service can be deployed separately
+- **Scalability** - services can be scaled independently as needed
+- **Technology Freedom** - each service can use different technologies
+- **Fault Isolation** - failure of one service doesn't affect others
+- **Team Autonomy** - different teams can work on different services
+- **Database per Service** - each service has its own database
 
-## Přímý přístup k databázím
+## Direct Database Access
 
 ### Student Database
 ```bash
@@ -314,23 +314,23 @@ docker exec -it projects_db psql -U postgres -d projects
 
 ## Domain-Driven Design
 
-Každý mikroservis používá DDD strukturu:
+Each microservice uses DDD structure:
 
 ### Model Layer
-- Definice entit
-- Bun tagy pro ORM mapping
-- JSON tagy pro API response
+- Entity definitions
+- Bun tags for ORM mapping
+- JSON tags for API response
 
 ### Repository Layer
-- Interface pro DB operace
-- CRUD metody s Bun ORM
-- Vrací Go errors
+- Interface for DB operations
+- CRUD methods with Bun ORM
+- Returns Go errors
 
 ### Service Layer
-- Business logika
-- Validace vstupů
+- Business logic
+- Input validation
 - Error handling
-- Strukturované logování
+- Structured logging
 
 ### HTTP Layer
 - REST handlers
@@ -339,34 +339,34 @@ Každý mikroservis používá DDD strukturu:
 
 ## Best Practices
 
-1. **Dependency Injection** - dependencies jsou injectované přes konstruktory
-2. **Interface segregation** - každá vrstva definuje své interface
-3. **Error wrapping** - použití `fmt.Errorf` s `%w`
-4. **Context propagation** - context.Context v každé metodě
-5. **Validation** - validace na service vrstvě
-6. **Structured logging** - strukturované logování pro monitoring
-7. **Graceful shutdown** - bezpečné ukončení služeb
+1. **Dependency Injection** - dependencies are injected via constructors
+2. **Interface Segregation** - each layer defines its own interfaces
+3. **Error Wrapping** - using `fmt.Errorf` with `%w`
+4. **Context Propagation** - context.Context in every method
+5. **Validation** - validation at service layer
+6. **Structured Logging** - structured logging for monitoring
+7. **Graceful Shutdown** - safe service termination
 
 ## Troubleshooting
 
-### Problém s připojením k databázi
+### Database Connection Issues
 
 ```bash
 docker-compose logs postgres
 docker-compose logs postgres_projects
 ```
 
-### Port již používán
+### Port Already in Use
 
-Změň porty v `docker-compose.yml`
+Change ports in `docker-compose.yml`
 
-### Rebuild Docker images
+### Rebuild Docker Images
 
 ```bash
 docker-compose up -d --build
 ```
 
-### Reset databází
+### Reset Databases
 
 ```bash
 docker-compose down -v
