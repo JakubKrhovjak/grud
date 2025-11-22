@@ -35,16 +35,10 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 
 func (h *Handler) CreateStudent(w http.ResponseWriter, r *http.Request) {
 	var student Student
-	if err := json.NewDecoder(r.Body).Decode(&student); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+	if err := json.NewDecoder(r.Body).Decode(&student); err != nil || h.validate.Struct(&student) != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request")
 		return
 	}
-
-	if err := h.validate.Struct(&student); err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	h.logger.Info("creating student", "email", student.Email)
 
 	if err := h.service.CreateStudent(r.Context(), &student); err != nil {
@@ -57,7 +51,6 @@ func (h *Handler) CreateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("student created successfully", "email", student.Email)
 	respondWithJSON(w, http.StatusCreated, student)
 }
 
@@ -71,7 +64,6 @@ func (h *Handler) GetAllStudents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("students fetched successfully")
 	respondWithJSON(w, http.StatusOK, students)
 }
 
@@ -101,7 +93,6 @@ func (h *Handler) GetStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("student fetched successfully", "email", student.Email)
 	respondWithJSON(w, http.StatusOK, student)
 }
 
@@ -114,16 +105,11 @@ func (h *Handler) UpdateStudent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var student Student
-	if err := json.NewDecoder(r.Body).Decode(&student); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+	if err := json.NewDecoder(r.Body).Decode(&student); err != nil || h.validate.Struct(&student) != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request")
 		return
 	}
 	student.ID = id
-
-	if err := h.validate.Struct(&student); err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 
 	h.logger.Info("updating student", "email", student.Email)
 
@@ -141,7 +127,6 @@ func (h *Handler) UpdateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("student updated successfully", "email", student.Email)
 	respondWithJSON(w, http.StatusOK, student)
 }
 
@@ -169,7 +154,6 @@ func (h *Handler) DeleteStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("student deleted successfully")
 	w.WriteHeader(http.StatusNoContent)
 }
 
