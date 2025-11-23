@@ -30,9 +30,9 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Environment
+# Environment (keep .env.local and .env.qa committed for easy switching)
 .env
-.env.local
+*.env.prod
 
 # Claude
 .claude/

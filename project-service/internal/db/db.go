@@ -20,7 +20,7 @@ func New(cfg config.DatabaseConfig) *bun.DB {
 		cfg.Password,
 		cfg.Host,
 		cfg.Port,
-		cfg.DBName,
+		cfg.Name,
 	)
 
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))

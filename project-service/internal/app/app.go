@@ -31,7 +31,11 @@ func New() *App {
 
 	slogLogger.Info("initializing application")
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+	slogLogger.Info("config loaded", "env", cfg.Env)
 
 	app := &App{
 		config: cfg,
@@ -78,13 +82,12 @@ func (a *App) Run() error {
 	}()
 
 	// Start gRPC server
-	grpcPort := "9090"
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", a.config.Grpc.Port))
 	if err != nil {
 		return fmt.Errorf("failed to listen on gRPC port: %w", err)
 	}
 
-	a.logger.Info("gRPC server starting", "port", grpcPort)
+	a.logger.Info("gRPC server starting", "port", a.config.Grpc.Port)
 	return a.grpcServer.Serve(lis)
 }
 

@@ -28,7 +28,11 @@ func New() *App {
 
 	slogLogger.Info("initializing application")
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+	slogLogger.Info("config loaded", "env", cfg.Env)
 
 	app := &App{
 		config: cfg,

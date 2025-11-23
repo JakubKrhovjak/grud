@@ -39,14 +39,7 @@ services:
     build: ./student-service
     container_name: student_api
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: university
-      PORT: 8080
-      PROJECT_SERVICE_URL: http://project_api:8081
-      PROJECT_SERVICE_GRPC: project_api:9090
+      APP_ENV: qa
     ports:
       - "8080:8080"
     depends_on:
@@ -57,12 +50,7 @@ services:
     build: ./project-service
     container_name: project_api
     environment:
-      DB_HOST: postgres_projects
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: projects
-      PORT: 8081
+      APP_ENV: qa
     ports:
       - "8081:8081"
       - "9090:9090"
