@@ -10,6 +10,7 @@ import (
 	"student-service/internal/config"
 	"student-service/internal/db"
 	"student-service/internal/logger"
+	"student-service/internal/projectclient"
 	"student-service/internal/student"
 
 	"github.com/gorilla/mux"
@@ -46,6 +47,11 @@ func New() *App {
 	studentService := student.NewService(studentRepo)
 	studentHandler := student.NewHandler(studentService, slogLogger)
 	studentHandler.RegisterRoutes(app.router)
+
+	// Initialize project client
+	projectClient := projectclient.NewClient(cfg.ProjectService.BaseURL)
+	projectHandler := projectclient.NewHandler(projectClient, slogLogger)
+	projectHandler.RegisterRoutes(app.router)
 
 	slogLogger.Info("application initialized successfully")
 

@@ -3,12 +3,17 @@ package config
 import "os"
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
+	Server         ServerConfig
+	Database       DatabaseConfig
+	ProjectService ProjectServiceConfig
 }
 
 type ServerConfig struct {
 	Port string
+}
+
+type ProjectServiceConfig struct {
+	BaseURL string
 }
 
 type DatabaseConfig struct {
@@ -30,6 +35,9 @@ func Load() *Config {
 			User:     getEnv("DB_USER", "postgres"),
 			Password: getEnv("DB_PASSWORD", "postgres"),
 			DBName:   getEnv("DB_NAME", "university"),
+		},
+		ProjectService: ProjectServiceConfig{
+			BaseURL: getEnv("PROJECT_SERVICE_URL", "http://localhost:8081"),
 		},
 	}
 }
