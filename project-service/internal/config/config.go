@@ -40,9 +40,10 @@ func Load() (*Config, error) {
 	// Set up Viper
 	viper.SetConfigName(fmt.Sprintf("config.%s", env))
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("./configs")
-	viper.AddConfigPath("../configs")
-	viper.AddConfigPath("../../configs")
+	viper.AddConfigPath("./configs")                 // Docker runtime
+	viper.AddConfigPath("./project-service/configs") // IDE from root
+	viper.AddConfigPath("../configs")                // IDE from cmd/server
+	viper.AddConfigPath("../../configs")             // IDE from other locations
 
 	// Read config file
 	if err := viper.ReadInConfig(); err != nil {

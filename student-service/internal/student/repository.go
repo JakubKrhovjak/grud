@@ -46,6 +46,16 @@ func (r *repository) Update(ctx context.Context, student *Student) error {
 
 func (r *repository) Delete(ctx context.Context, id int) error {
 	student := &Student{ID: id}
-	_, err := r.db.NewDelete().Model(student).WherePK().Exec(ctx)
-	return err
+	result, err := r.db.NewDelete().Model(student).WherePK().Exec(ctx)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrStudentNotFound
+	}
+	return nil
 }
