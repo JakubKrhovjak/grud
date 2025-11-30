@@ -2,10 +2,11 @@ package testdb
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"sync"
 	"testing"
 
-	"database/sql"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -15,6 +16,12 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 )
 
+var (
+	sharedContainer *PostgresContainer
+	sharedOnce      sync.Once
+	sharedMu        sync.Mutex
+)
+
 // PostgresContainer wraps the postgres testcontainer
 type PostgresContainer struct {
 	Container *postgres.PostgresContainer
@@ -22,43 +29,60 @@ type PostgresContainer struct {
 	DSN       string
 }
 
-// SetupPostgres creates a new PostgreSQL testcontainer and connects to it
-func SetupPostgres(t *testing.T) *PostgresContainer {
+// SetupSharedPostgres creates a single PostgreSQL container shared across all tests
+// This is the RECOMMENDED approach for all tests - much faster than isolated containers
+//
+// IMPORTANT: Tests using shared container CANNOT run in parallel!
+//
+// Usage:
+//
+//	func TestMyService(t *testing.T) {
+//	    pgContainer := testdb.SetupSharedPostgres(t)
+//	    defer pgContainer.Cleanup(t)  // ← Only call once at top level
+//
+//	    pgContainer.RunMigrations(t, (*MyModel)(nil))
+//
+//	    t.Run("Test1", func(t *testing.T) {
+//	        testdb.CleanupTables(t, pgContainer.DB, "my_table")
+//	        // ... test
+//	    })
+//	}
+func SetupSharedPostgres(t *testing.T) *PostgresContainer {
 	t.Helper()
-	ctx := context.Background()
 
-	// Start PostgreSQL container
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:16-alpine",
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("postgres"),
-		postgres.WithPassword("postgres"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2),
-		),
-	)
-	require.NoError(t, err)
+	sharedOnce.Do(func() {
+		ctx := context.Background()
+		pgContainer, err := postgres.Run(ctx,
+			"postgres:16-alpine",
+			postgres.WithDatabase("testdb"),
+			postgres.WithUsername("postgres"),
+			postgres.WithPassword("postgres"),
+			testcontainers.WithWaitStrategy(
+				wait.ForLog("database system is ready to accept connections").
+					WithOccurrence(2),
+			),
+		)
+		require.NoError(t, err)
 
-	// Get connection string
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
+		connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+		require.NoError(t, err)
 
-	// Connect to database
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(connStr)))
-	db := bun.NewDB(sqldb, pgdialect.New())
+		sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(connStr)))
+		db := bun.NewDB(sqldb, pgdialect.New())
 
-	err = db.Ping()
-	require.NoError(t, err)
+		err = db.Ping()
+		require.NoError(t, err)
 
-	return &PostgresContainer{
-		Container: pgContainer,
-		DB:        db,
-		DSN:       connStr,
-	}
+		sharedContainer = &PostgresContainer{
+			Container: pgContainer,
+			DB:        db,
+			DSN:       connStr,
+		}
+	})
+
+	return sharedContainer
 }
 
-// Cleanup closes the database connection and terminates the container
 func (pc *PostgresContainer) Cleanup(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
@@ -74,7 +98,6 @@ func (pc *PostgresContainer) Cleanup(t *testing.T) {
 	}
 }
 
-// RunMigrations runs database migrations for the given models
 func (pc *PostgresContainer) RunMigrations(t *testing.T, models ...interface{}) {
 	t.Helper()
 	ctx := context.Background()
@@ -101,7 +124,6 @@ func (pc *PostgresContainer) RunMigrations(t *testing.T, models ...interface{}) 
 	require.NoError(t, err, "failed to create trigger function")
 }
 
-// CreateUpdateTrigger creates an update trigger for a specific table
 func (pc *PostgresContainer) CreateUpdateTrigger(t *testing.T, tableName string) {
 	t.Helper()
 	ctx := context.Background()
@@ -116,4 +138,15 @@ func (pc *PostgresContainer) CreateUpdateTrigger(t *testing.T, tableName string)
 
 	_, err := pc.DB.ExecContext(ctx, query)
 	require.NoError(t, err, "failed to create trigger for table %s", tableName)
+}
+
+func CleanupTables(t *testing.T, db *bun.DB, tables ...string) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	for _, table := range tables {
+		_, err := db.ExecContext(ctx, "TRUNCATE "+table+" RESTART IDENTITY CASCADE")
+		require.NoError(t, err, "failed to truncate table: %s", table)
+	}
 }

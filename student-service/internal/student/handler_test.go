@@ -17,10 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Shared container tests - all subtests share a single PostgreSQL container
-// This is ~7-8x faster than integration tests for local development
-// Trade-off: subtests share state (cleaned between runs) and CANNOT run in parallel
-// Run with: go test ./...
 func TestStudentService_Shared(t *testing.T) {
 	pgContainer := testdb.SetupSharedPostgres(t)
 	defer pgContainer.Cleanup(t)
