@@ -29,7 +29,7 @@ patches:
         value: ko://student-service/cmd/server
       - op: replace
         path: /spec/template/spec/containers/0/env/1/value
-        value: student-db-rw.grud.svc.cluster.local
+        value: student-db.grud.svc.cluster.local
       - op: replace
         path: /spec/template/spec/containers/0/env/3/valueFrom/secretKeyRef/name
         value: student-db-app

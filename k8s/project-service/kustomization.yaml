@@ -32,7 +32,7 @@ patches:
         value: "8081"
       - op: replace
         path: /spec/template/spec/containers/0/env/1/value
-        value: project-db-rw.grud.svc.cluster.local
+        value: project-db.grud.svc.cluster.local
       - op: replace
         path: /spec/template/spec/containers/0/env/3/valueFrom/secretKeyRef/name
         value: project-db-app

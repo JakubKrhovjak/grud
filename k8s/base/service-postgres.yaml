@@ -1,0 +1,16 @@
+# Base PostgreSQL Service template
+# Service-specific values are patched via overlays
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    app: db
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: db

@@ -16,22 +16,7 @@ patches:
         path: /spec/replicas
         value: 1
 
-  # Reduce database instances
-  - target:
-      kind: Cluster
-      name: student-db
-    patch: |-
-      - op: replace
-        path: /spec/instances
-        value: 1
-
-  - target:
-      kind: Cluster
-      name: project-db
-    patch: |-
-      - op: replace
-        path: /spec/instances
-        value: 1
+  # Note: Databases already use 1 replica by default
 
 # Development labels
 commonLabels:

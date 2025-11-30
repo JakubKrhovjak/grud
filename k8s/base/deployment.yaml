@@ -63,7 +63,7 @@ spec:
               value: "8080"
             # Database connection from secrets
             - name: DB_HOST
-              value: "db-rw.grud.svc.cluster.local"
+              value: "db.grud.svc.cluster.local"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME

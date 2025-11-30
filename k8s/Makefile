@@ -20,13 +20,6 @@ setup: ## Create Kind cluster (required first step)
 	@echo "$(BLUE)🚀 Creating Kind cluster...$(NC)"
 	@../scripts/kind-setup.sh
 
-install-operator: ## Install CloudNativePG operator (required before deploy)
-	@echo "$(BLUE)🐘 Installing CloudNativePG operator...$(NC)"
-	@kubectl apply -k setup/
-	@echo "$(BLUE)⏳ Waiting for operator to be ready...$(NC)"
-	@kubectl wait --for=condition=Available deployment/cnpg-controller-manager -n cnpg-system --timeout=300s
-	@echo "$(GREEN)✅ Operator installed!$(NC)"
-
 deploy: ## Deploy everything with Ko + Kustomize (production config)
 	@echo "$(BLUE)🚀 Building and deploying services...$(NC)"
 	@ko resolve -f . | kubectl apply -f -
@@ -34,7 +27,7 @@ deploy: ## Deploy everything with Ko + Kustomize (production config)
 
 deploy-dev: ## Deploy with development overlay (1 replica each)
 	@echo "$(BLUE)🚀 Deploying to development...$(NC)"
-	@ko resolve -f overlays/dev/ | kubectl apply -f -
+	 @ko resolve -f overlays/dev/ | kubectl apply -f -
 	@echo "$(GREEN)✅ Development deployment complete!$(NC)"
 
 deploy-prod: ## Deploy with production overlay (3 replicas each)
@@ -56,19 +49,22 @@ status: ## Show cluster status
 	@echo "$(YELLOW)Deployments:$(NC)"
 	@kubectl get deployments -n grud
 	@echo ""
+	@echo "$(YELLOW)StatefulSets:$(NC)"
+	@kubectl get statefulsets -n grud
+	@echo ""
 	@echo "$(YELLOW)Pods:$(NC)"
 	@kubectl get pods -n grud -o wide
 	@echo ""
 	@echo "$(YELLOW)Services:$(NC)"
 	@kubectl get services -n grud
 	@echo ""
-	@echo "$(YELLOW)Database Clusters:$(NC)"
-	@kubectl get clusters -n grud
+	@echo "$(YELLOW)PersistentVolumeClaims:$(NC)"
+	@kubectl get pvc -n grud
 
 wait: ## Wait for all resources to be ready
 	@echo "$(BLUE)⏳ Waiting for databases...$(NC)"
-	@kubectl wait --for=condition=Ready cluster/student-db -n grud --timeout=300s
-	@kubectl wait --for=condition=Ready cluster/project-db -n grud --timeout=300s
+	@kubectl wait --for=condition=Ready pod -l app=student-db -n grud --timeout=300s
+	@kubectl wait --for=condition=Ready pod -l app=project-db -n grud --timeout=300s
 	@echo "$(BLUE)⏳ Waiting for services...$(NC)"
 	@kubectl wait --for=condition=Available deployment/student-service -n grud --timeout=300s
 	@kubectl wait --for=condition=Available deployment/project-service -n grud --timeout=300s
@@ -85,7 +81,8 @@ logs-project: ## Follow project-service logs
 	@kubectl logs -n grud -l app=project-service -f --tail=100
 
 logs-db: ## Follow database logs
-	@kubectl logs -n grud -l postgresql -f --tail=50
+	@kubectl logs -n grud -l app=student-db -f --tail=50 &
+	@kubectl logs -n grud -l app=project-db -f --tail=50
 
 test: ## Test services
 	@echo "$(BLUE)🧪 Testing services...$(NC)"
@@ -100,8 +97,8 @@ cleanup: ## Delete the entire cluster
 	@../scripts/cleanup.sh
 
 # Full workflow targets
-all: setup install-operator deploy wait status ## Complete setup (cluster + operator + deploy)
+all: setup deploy wait status ## Complete setup (cluster + deploy)
 
-dev: setup install-operator deploy-dev wait status ## Complete development setup
+dev: setup deploy-dev wait status ## Complete development setup
 
-prod: setup install-operator deploy-prod wait status ## Complete production setup
+prod: setup deploy-prod wait status ## Complete production setup
