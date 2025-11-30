@@ -22,10 +22,10 @@ patches:
     patch: |-
       - op: replace
         path: /data/ENV
-        value: development
+        value: dev
 
 commonLabels:
-  environment: development
+  environment: dev
 
 commonAnnotations:
-  grud.io/environment: "development"
+  grud.io/environment: "dev"
