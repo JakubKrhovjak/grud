@@ -1,32 +1,7 @@
 # Main kustomization for complete GRUD deployment
-# Uses overlays for both services and databases
-# Usage: ko resolve -f k8s/ | kubectl apply -f -
+# Points to base configuration
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: grud
-
 resources:
-  # Namespace
-  - namespace.yaml
-
-  # PostgreSQL secrets
-  - postgres/secrets.yaml
-
-  # Databases (using overlays from base templates)
-  - postgres/student
-  - postgres/project
-
-  # Services (using overlays from base templates)
-  - student-service
-  - project-service
-
-# Common labels for all resources
-commonLabels:
-  app.kubernetes.io/part-of: grud-system
-  app.kubernetes.io/managed-by: kustomize
-
-# Common annotations
-commonAnnotations:
-  grud.io/version: "1.0.0"
-  grud.io/deployed-by: "kustomize"
+  - base

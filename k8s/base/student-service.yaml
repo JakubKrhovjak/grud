@@ -1,30 +1,51 @@
-# Base deployment template for Go microservices
-# Service-specific values are patched via overlays
+# Student Service - Complete manifest
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: student-service-config
+  namespace: grud
+data:
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  DB_MAX_OPEN_CONNS: "25"
+  DB_MAX_IDLE_CONNS: "10"
+  DB_CONN_MAX_LIFETIME: "5m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: student-service
+  namespace: grud
+spec:
+  type: NodePort
+  selector:
+    app: student-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: service
-  labels:
-    app.kubernetes.io/component: api
+  name: student-service
+  namespace: grud
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: service
+      app: student-service
   template:
     metadata:
       labels:
-        app: service
-        app.kubernetes.io/component: api
+        app: student-service
     spec:
-      # Toleration for app node taint
       tolerations:
         - key: "workload"
           operator: "Equal"
           value: "app"
           effect: "NoSchedule"
-
-      # Node affinity - prefer app nodes
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -34,74 +55,54 @@ spec:
                     operator: In
                     values:
                       - app
-
-        # Pod anti-affinity - spread across nodes
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    - key: app
-                      operator: In
-                      values:
-                        - service
-                topologyKey: kubernetes.io/hostname
-
       containers:
-        - name: service
-          # Ko will resolve this image reference
-          image: ko://service/cmd/server
+        - name: student-service
+          image: ko://student-service/cmd/server
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080
-              protocol: TCP
-
           env:
             - name: PORT
               value: "8080"
-            # Database connection from secrets
             - name: DB_HOST
-              value: "db.grud.svc.cluster.local"
+              value: "student-db.grud.svc.cluster.local"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
               valueFrom:
                 secretKeyRef:
-                  name: db-app
+                  name: student-db-app
                   key: dbname
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: db-app
+                  name: student-db-app
                   key: username
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: db-app
+                  name: student-db-app
                   key: password
-
-          # Health probes
+          envFrom:
+            - configMapRef:
+                name: student-service-config
+          volumeMounts:
+            - name: config
+              mountPath: /configs
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-
           readinessProbe:
             httpGet:
               path: /ready
               port: http
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
-
-          # Resource limits
           resources:
             requests:
               memory: "128Mi"
@@ -109,8 +110,6 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "500m"
-
-          # Security context
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
@@ -119,3 +118,7 @@ spec:
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: student-service-file-config
