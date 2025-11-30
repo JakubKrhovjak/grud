@@ -1,0 +1,56 @@
+# Project service overlay
+# Patches the base templates with project-service specific values
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: grud
+
+# Use base templates
+resources:
+  - ../base
+
+# Name prefix for all resources
+namePrefix: project-
+
+# Common labels
+commonLabels:
+  app: project-service
+  app.kubernetes.io/name: project-service
+
+# Patches for service-specific values
+patches:
+  # Deployment patches
+  - target:
+      kind: Deployment
+      name: service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: ko://project-service/cmd/server
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "8081"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: project-db-rw.grud.svc.cluster.local
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/valueFrom/secretKeyRef/name
+        value: project-db-app
+      - op: replace
+        path: /spec/template/spec/containers/0/env/4/valueFrom/secretKeyRef/name
+        value: project-db-app
+      - op: replace
+        path: /spec/template/spec/containers/0/env/5/valueFrom/secretKeyRef/name
+        value: project-db-app
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8081
+
+  # Service patches
+  - target:
+      kind: Service
+      name: service
+    patch: |-
+      - op: replace
+        path: /spec/ports/0/nodePort
+        value: 30081

@@ -1,0 +1,38 @@
+# Development overlay for local Kind cluster
+# Reduces resource usage for local development
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../
+
+# Development-specific patches
+patches:
+  # Reduce replicas for all deployments
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  # Reduce database instances
+  - target:
+      kind: Cluster
+      name: student-db
+    patch: |-
+      - op: replace
+        path: /spec/instances
+        value: 1
+
+  - target:
+      kind: Cluster
+      name: project-db
+    patch: |-
+      - op: replace
+        path: /spec/instances
+        value: 1
+
+# Development labels
+commonLabels:
+  environment: development

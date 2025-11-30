@@ -1,5 +1,6 @@
-# Kustomize configuration for deploying all resources
-# Usage: kubectl apply -k k8s/
+# Main kustomization for complete GRUD deployment
+# Uses service-specific overlays instead of direct resources
+# Usage: ko resolve -f k8s/ | kubectl apply -f -
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -9,22 +10,21 @@ resources:
   # Namespace
   - namespace.yaml
 
-  # PostgreSQL
+  # PostgreSQL (CloudNativePG operator must be installed first)
   - postgres/secrets.yaml
   - postgres/student-db.yaml
   - postgres/project-db.yaml
 
-  # Student Service
-  - student-service/configmap.yaml
-  - student-service/deployment.yaml
-  - student-service/service.yaml
+  # Services (using overlays from base templates)
+  - student-service
+  - project-service
 
-  # Project Service
-  - project-service/configmap.yaml
-  - project-service/deployment.yaml
-  - project-service/service.yaml
-
-# Common labels applied to all resources
+# Common labels for all resources
 commonLabels:
   app.kubernetes.io/part-of: grud-system
-  managed-by: kustomize
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  grud.io/version: "1.0.0"
+  grud.io/deployed-by: "kustomize"

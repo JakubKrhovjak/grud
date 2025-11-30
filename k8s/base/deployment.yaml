@@ -1,23 +1,20 @@
+# Base deployment template for Go microservices
+# Service-specific values are patched via overlays
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: project-service
-  namespace: grud
+  name: service
   labels:
-    app: project-service
-    app.kubernetes.io/name: project-service
     app.kubernetes.io/component: api
-    app.kubernetes.io/part-of: grud-system
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: project-service
+      app: service
   template:
     metadata:
       labels:
-        app: project-service
-        app.kubernetes.io/name: project-service
+        app: service
         app.kubernetes.io/component: api
     spec:
       # Toleration for app node taint
@@ -48,42 +45,44 @@ spec:
                     - key: app
                       operator: In
                       values:
-                        - project-service
+                        - service
                 topologyKey: kubernetes.io/hostname
 
       containers:
-        - name: project-service
-          # This will be replaced by ko with the actual image
-          image: ko://project-service/cmd/server
+        - name: service
+          # Ko will resolve this image reference
+          image: ko://service/cmd/server
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 8081
+              containerPort: 8080
               protocol: TCP
 
           env:
             - name: PORT
-              value: "8081"
+              value: "8080"
+            # Database connection from secrets
             - name: DB_HOST
-              value: "project-db-rw.grud.svc.cluster.local"
+              value: "db-rw.grud.svc.cluster.local"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
               valueFrom:
                 secretKeyRef:
-                  name: project-db-app
+                  name: db-app
                   key: dbname
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: project-db-app
+                  name: db-app
                   key: username
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: project-db-app
+                  name: db-app
                   key: password
 
+          # Health probes
           livenessProbe:
             httpGet:
               path: /health
@@ -102,6 +101,7 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
 
+          # Resource limits
           resources:
             requests:
               memory: "128Mi"
@@ -110,6 +110,7 @@ spec:
               memory: "256Mi"
               cpu: "500m"
 
+          # Security context
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532

@@ -1,0 +1,9 @@
+# Base resources for Go microservices
+# These are generic templates that get customized by overlays
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml

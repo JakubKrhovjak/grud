@@ -1,10 +1,9 @@
+# Base configmap template
+# Service-specific values are patched via overlays
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: project-service-config
-  namespace: grud
-  labels:
-    app: project-service
+  name: service-config
 data:
   # Application configuration
   LOG_LEVEL: "info"
