@@ -20,19 +20,19 @@ setup: ## Create Kind cluster (required first step)
 	@echo "$(BLUE)🚀 Creating Kind cluster...$(NC)"
 	@../scripts/kind-setup.sh
 
-deploy: ## Deploy everything with Ko + Kustomize (production config)
+deploy: ## Deploy everything with Ko + Kustomize (base config)
 	@echo "$(BLUE)🚀 Building and deploying services...$(NC)"
-	@ko resolve -f . | kubectl apply -f -
+	@kustomize build . | ko resolve -f - | kubectl apply -f -
 	@echo "$(GREEN)✅ Deployment complete!$(NC)"
 
 deploy-dev: ## Deploy with development overlay (1 replica each)
 	@echo "$(BLUE)🚀 Deploying to development...$(NC)"
-	 @ko resolve -f overlays/dev/ | kubectl apply -f -
+	@kustomize build overlays/dev/ | ko resolve -f - | kubectl apply -f -
 	@echo "$(GREEN)✅ Development deployment complete!$(NC)"
 
 deploy-prod: ## Deploy with production overlay (3 replicas each)
 	@echo "$(BLUE)🚀 Deploying to production...$(NC)"
-	@ko resolve -f overlays/prod/ | kubectl apply -f -
+	@kustomize build overlays/prod/ | ko resolve -f - | kubectl apply -f -
 	@echo "$(GREEN)✅ Production deployment complete!$(NC)"
 
 build-only: ## Only build images without deploying
