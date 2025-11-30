@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"student-service/internal/auth"
 	"student-service/internal/config"
 	"student-service/internal/db"
 	"student-service/internal/health"
@@ -48,19 +49,31 @@ func New() *App {
 	database := db.New(cfg.Database)
 
 	ctx := context.Background()
-	if err := db.RunMigrations(ctx, database, (*student.Student)(nil)); err != nil {
+	if err := db.RunMigrations(ctx, database, (*student.Student)(nil), (*auth.RefreshToken)(nil)); err != nil {
 		log.Fatal("failed to run migrations:", err)
 	}
 
-	// Health endpoints
+	// Health endpoints (no auth required)
 	healthHandler := health.NewHandler()
 	healthHandler.RegisterRoutes(app.router)
 
+	// Auth setup
 	studentRepo := student.NewRepository(database)
+	authRepo := auth.NewRepository(database)
+	authService := auth.NewService(authRepo, studentRepo)
+	authHandler := auth.NewHandler(authService, slogLogger)
+	authHandler.RegisterRoutes(app.router)
+
+	// Student endpoints (auth required)
 	studentService := student.NewService(studentRepo)
 	studentHandler := student.NewHandler(studentService, slogLogger)
-	studentHandler.RegisterRoutes(app.router)
 
+	// Create protected subrouter for student endpoints
+	protectedRouter := app.router.PathPrefix("/api").Subrouter()
+	protectedRouter.Use(auth.AuthMiddleware(slogLogger))
+	studentHandler.RegisterRoutes(protectedRouter)
+
+	// Project client endpoints (auth required)
 	httpClient := projectclient.NewClient(cfg.ProjectService.BaseURL)
 
 	grpcClient, err := projectclient.NewGrpcClient(cfg.ProjectService.GrpcAddress)
@@ -72,7 +85,7 @@ func New() *App {
 	}
 
 	projectHandler := projectclient.NewHandler(httpClient, grpcClient, slogLogger)
-	projectHandler.RegisterRoutes(app.router)
+	projectHandler.RegisterRoutes(protectedRouter)
 
 	slogLogger.Info("application initialized successfully")
 
