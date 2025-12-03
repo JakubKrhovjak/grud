@@ -79,10 +79,5 @@ func ValidateAccessToken(tokenString string) (*Claims, error) {
 
 // getJWTSecret retrieves JWT secret from environment
 func getJWTSecret() string {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		// For development only - NEVER use this in production
-		secret = "dev-secret-change-in-production"
-	}
-	return secret
+	return os.Getenv("JWT_SECRET")
 }

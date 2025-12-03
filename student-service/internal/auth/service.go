@@ -108,7 +108,6 @@ func (s *Service) LogoutAll(ctx context.Context, studentID int) error {
 
 // generateTokenPair creates access and refresh tokens
 func (s *Service) generateTokenPair(ctx context.Context, stud *student.Student) (*AuthResponse, error) {
-	// Generate access token (JWT, 15 minutes)
 	accessToken, err := GenerateAccessToken(stud.ID, stud.Email)
 	if err != nil {
 		return nil, err
