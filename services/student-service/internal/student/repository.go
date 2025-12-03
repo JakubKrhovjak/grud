@@ -1,0 +1,94 @@
+package student
+
+import (
+	"context"
+	"database/sql"
+
+	"github.com/uptrace/bun"
+)
+
+type Repository interface {
+	Create(ctx context.Context, student *Student) (*Student, error)
+	GetAll(ctx context.Context) ([]Student, error)
+	GetByID(ctx context.Context, id int) (*Student, error)
+	GetByEmail(ctx context.Context, email string) (*Student, error)
+	Update(ctx context.Context, student *Student) error
+	Delete(ctx context.Context, id int) error
+}
+
+type repository struct {
+	db *bun.DB
+}
+
+func NewRepository(db *bun.DB) Repository {
+	return &repository{db: db}
+}
+
+func (r *repository) Create(ctx context.Context, student *Student) (*Student, error) {
+	_, err := r.db.NewInsert().Model(student).Returning("*").Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return student, nil
+}
+
+func (r *repository) GetAll(ctx context.Context) ([]Student, error) {
+	var students []Student
+	err := r.db.NewSelect().Model(&students).Scan(ctx)
+	return students, err
+}
+
+func (r *repository) GetByID(ctx context.Context, id int) (*Student, error) {
+	student := new(Student)
+	err := r.db.NewSelect().Model(student).Where("id = ?", id).Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrStudentNotFound
+		}
+		return nil, err
+	}
+	return student, nil
+}
+
+func (r *repository) Update(ctx context.Context, student *Student) error {
+	result, err := r.db.NewUpdate().Model(student).WherePK().Exec(ctx)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrStudentNotFound
+	}
+	return nil
+}
+
+func (r *repository) Delete(ctx context.Context, id int) error {
+	student := &Student{ID: id}
+	result, err := r.db.NewDelete().Model(student).WherePK().Exec(ctx)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrStudentNotFound
+	}
+	return nil
+}
+
+func (r *repository) GetByEmail(ctx context.Context, email string) (*Student, error) {
+	student := new(Student)
+	err := r.db.NewSelect().Model(student).Where("email = ?", email).Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrStudentNotFound
+		}
+		return nil, err
+	}
+	return student, nil
+}
