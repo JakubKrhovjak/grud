@@ -11,6 +11,8 @@ import (
 	"student-service/internal/config"
 	"student-service/internal/db"
 	"student-service/internal/health"
+	"student-service/internal/kafka"
+	"student-service/internal/message"
 	"student-service/internal/middleware"
 	"student-service/internal/projectclient"
 	"student-service/internal/student"
@@ -87,6 +89,22 @@ func New() *App {
 
 	projectHandler := projectclient.NewHandler(httpClient, grpcClient, slogLogger)
 	projectHandler.RegisterRoutes(protectedRouter)
+
+	// Kafka producer setup
+	kafkaProducer, err := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic, slogLogger)
+	if err != nil {
+		slogLogger.Warn("failed to initialize kafka producer", "error", err)
+		kafkaProducer = nil
+	} else {
+		slogLogger.Info("kafka producer initialized successfully")
+	}
+
+	// Message handler (only if Kafka is available)
+	if kafkaProducer != nil {
+		messageService := message.NewService(kafkaProducer, slogLogger)
+		messageHandler := message.NewHandler(messageService, slogLogger)
+		messageHandler.RegisterRoutes(protectedRouter)
+	}
 
 	slogLogger.Info("application initialized successfully")
 
