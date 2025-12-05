@@ -22,12 +22,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const storedRefreshToken = localStorage.getItem('refreshToken');
     const storedStudent = localStorage.getItem('student');
 
-    if (storedAccessToken && storedRefreshToken && storedStudent) {
+    if (hasSecretes(storedAccessToken, storedRefreshToken, storedStudent)) {
       setAccessToken(storedAccessToken);
       setRefreshToken(storedRefreshToken);
-      setStudent(JSON.parse(storedStudent));
+      setStudent(JSON.parse(storedStudent!));
     }
   }, []);
+
+  const hasSecretes = (storedAccessToken: string | null, storedRefreshToken: string | null, storedStudent: string | null): boolean => {
+    return !!(storedAccessToken && storedRefreshToken && storedStudent);
+  }
 
   const login = (newAccessToken: string, newRefreshToken: string, newStudent: Student) => {
     setAccessToken(newAccessToken);
