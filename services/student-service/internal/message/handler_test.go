@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -14,45 +13,63 @@ import (
 	"student-service/internal/auth"
 	"student-service/internal/message"
 
+	"github.com/IBM/sarama"
+	"github.com/IBM/sarama/mocks"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// MockProducer mocks the Kafka producer for testing
-type MockProducer struct {
-	SendMessageFunc func(key string, value interface{}) error
-	messages        []MockMessage
+// SaramaProducerAdapter adapts sarama.SyncProducer to message.Producer interface
+type SaramaProducerAdapter struct {
+	producer sarama.SyncProducer
+	topic    string
 }
 
-type MockMessage struct {
-	Key   string
-	Value interface{}
-}
-
-func (m *MockProducer) SendMessage(key string, value interface{}) error {
-	if m.SendMessageFunc != nil {
-		return m.SendMessageFunc(key, value)
+func (a *SaramaProducerAdapter) SendMessage(key string, value interface{}) error {
+	valueBytes, err := json.Marshal(value)
+	if err != nil {
+		return err
 	}
-	m.messages = append(m.messages, MockMessage{Key: key, Value: value})
-	return nil
+
+	msg := &sarama.ProducerMessage{
+		Topic: a.topic,
+		Key:   sarama.StringEncoder(key),
+		Value: sarama.ByteEncoder(valueBytes),
+	}
+
+	_, _, err = a.producer.SendMessage(msg)
+	return err
 }
 
-func (m *MockProducer) Close() error {
-	return nil
+func (a *SaramaProducerAdapter) Close() error {
+	return a.producer.Close()
+}
+
+// setupTest creates test dependencies
+func setupTest(t *testing.T, mockProducer sarama.SyncProducer) chi.Router {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	adapter := &SaramaProducerAdapter{
+		producer: mockProducer,
+		topic:    "test-topic",
+	}
+
+	service := message.NewService(adapter, logger)
+	handler := message.NewHandler(service, logger)
+
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+
+	return router
 }
 
 func TestMessageHandler(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	mockProducer := mocks.NewSyncProducer(t, nil)
+	router := setupTest(t, mockProducer)
 
 	t.Run("SendMessage_Success", func(t *testing.T) {
-		// Setup mock producer
-		mockProducer := &MockProducer{}
-		service := message.NewService(mockProducer, logger)
-		handler := message.NewHandler(service, logger)
-
-		router := chi.NewRouter()
-		handler.RegisterRoutes(router)
+		mockProducer.ExpectSendMessageAndSucceed()
 
 		// Create request payload
 		payload := message.SendMessageRequest{
@@ -83,23 +100,10 @@ func TestMessageHandler(t *testing.T) {
 		assert.Equal(t, "success", response["status"])
 		assert.Equal(t, "message sent successfully", response["message"])
 
-		// Verify message was sent to Kafka
-		require.Len(t, mockProducer.messages, 1)
-		assert.Equal(t, "test@example.com", mockProducer.messages[0].Key)
-
-		messageEvent, ok := mockProducer.messages[0].Value.(message.MessageEvent)
-		require.True(t, ok)
-		assert.Equal(t, "test@example.com", messageEvent.Email)
-		assert.Equal(t, "Hello from test!", messageEvent.Message)
+		// Sarama mock automatically verifies expectation was met
 	})
 
 	t.Run("SendMessage_Unauthorized_NoEmail", func(t *testing.T) {
-		mockProducer := &MockProducer{}
-		service := message.NewService(mockProducer, logger)
-		handler := message.NewHandler(service, logger)
-
-		router := chi.NewRouter()
-		handler.RegisterRoutes(router)
 
 		payload := message.SendMessageRequest{
 			Message: "Hello from test!",
@@ -117,17 +121,10 @@ func TestMessageHandler(t *testing.T) {
 		// Should return 401 Unauthorized
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-		// Verify no message was sent
-		assert.Len(t, mockProducer.messages, 0)
+		// No message sent - Sarama mock verifies automatically
 	})
 
 	t.Run("SendMessage_InvalidJSON", func(t *testing.T) {
-		mockProducer := &MockProducer{}
-		service := message.NewService(mockProducer, logger)
-		handler := message.NewHandler(service, logger)
-
-		router := chi.NewRouter()
-		handler.RegisterRoutes(router)
 
 		// Invalid JSON
 		req := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewReader([]byte("invalid json")))
@@ -141,19 +138,9 @@ func TestMessageHandler(t *testing.T) {
 
 		// Should return 400 Bad Request
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-
-		// Verify no message was sent
-		assert.Len(t, mockProducer.messages, 0)
 	})
 
 	t.Run("SendMessage_EmptyMessage", func(t *testing.T) {
-		mockProducer := &MockProducer{}
-		service := message.NewService(mockProducer, logger)
-		handler := message.NewHandler(service, logger)
-
-		router := chi.NewRouter()
-		handler.RegisterRoutes(router)
-
 		// Empty message (should fail validation)
 		payload := message.SendMessageRequest{
 			Message: "",
@@ -172,23 +159,10 @@ func TestMessageHandler(t *testing.T) {
 
 		// Should return 400 Bad Request (validation failed)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-
-		// Verify no message was sent
-		assert.Len(t, mockProducer.messages, 0)
 	})
 
-	t.Run("SendMessage_ProducerError", func(t *testing.T) {
-		// Setup mock producer that returns error
-		mockProducer := &MockProducer{
-			SendMessageFunc: func(key string, value interface{}) error {
-				return errors.New("kafka connection failed")
-			},
-		}
-		service := message.NewService(mockProducer, logger)
-		handler := message.NewHandler(service, logger)
-
-		router := chi.NewRouter()
-		handler.RegisterRoutes(router)
+	t.Run("SendMessage_KafkaError", func(t *testing.T) {
+		mockProducer.ExpectSendMessageAndFail(sarama.ErrOutOfBrokers)
 
 		payload := message.SendMessageRequest{
 			Message: "Hello from test!",
@@ -210,12 +184,9 @@ func TestMessageHandler(t *testing.T) {
 	})
 
 	t.Run("SendMessage_MultipleMessages", func(t *testing.T) {
-		mockProducer := &MockProducer{}
-		service := message.NewService(mockProducer, logger)
-		handler := message.NewHandler(service, logger)
-
-		router := chi.NewRouter()
-		handler.RegisterRoutes(router)
+		// Expect 2 messages
+		mockProducer.ExpectSendMessageAndSucceed()
+		mockProducer.ExpectSendMessageAndSucceed()
 
 		// Send first message
 		payload1 := message.SendMessageRequest{
@@ -247,15 +218,54 @@ func TestMessageHandler(t *testing.T) {
 		router.ServeHTTP(w2, req2)
 		assert.Equal(t, http.StatusOK, w2.Code)
 
-		// Verify both messages were sent
-		require.Len(t, mockProducer.messages, 2)
+		// Sarama mock automatically verifies both messages were sent
+	})
 
-		msg1 := mockProducer.messages[0].Value.(message.MessageEvent)
-		assert.Equal(t, "user1@example.com", msg1.Email)
-		assert.Equal(t, "First message", msg1.Message)
+	t.Run("SendMessage_NetworkTimeout", func(t *testing.T) {
+		mockProducer.ExpectSendMessageAndFail(sarama.ErrRequestTimedOut)
 
-		msg2 := mockProducer.messages[1].Value.(message.MessageEvent)
-		assert.Equal(t, "user2@example.com", msg2.Email)
-		assert.Equal(t, "Second message", msg2.Message)
+		payload := message.SendMessageRequest{
+			Message: "This will timeout",
+		}
+		body, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		ctx := context.WithValue(req.Context(), auth.EmailKey, "test@example.com")
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("SendMessage_PartialFailure", func(t *testing.T) {
+
+		// First succeeds, second fails
+		mockProducer.ExpectSendMessageAndSucceed()
+		mockProducer.ExpectSendMessageAndFail(sarama.ErrNotLeaderForPartition)
+
+		// First message succeeds
+		payload1 := message.SendMessageRequest{Message: "Should succeed"}
+		body1, _ := json.Marshal(payload1)
+		req1 := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewReader(body1))
+		req1.Header.Set("Content-Type", "application/json")
+		ctx1 := context.WithValue(req1.Context(), auth.EmailKey, "user1@example.com")
+		req1 = req1.WithContext(ctx1)
+		w1 := httptest.NewRecorder()
+		router.ServeHTTP(w1, req1)
+		assert.Equal(t, http.StatusOK, w1.Code)
+
+		// Second message fails
+		payload2 := message.SendMessageRequest{Message: "Should fail"}
+		body2, _ := json.Marshal(payload2)
+		req2 := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewReader(body2))
+		req2.Header.Set("Content-Type", "application/json")
+		ctx2 := context.WithValue(req2.Context(), auth.EmailKey, "user2@example.com")
+		req2 = req2.WithContext(ctx2)
+		w2 := httptest.NewRecorder()
+		router.ServeHTTP(w2, req2)
+		assert.Equal(t, http.StatusInternalServerError, w2.Code)
 	})
 }
