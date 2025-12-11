@@ -2,7 +2,6 @@ package projectclient
 
 import (
 	"log/slog"
-	"math/rand"
 	"net/http"
 
 	"grud/common/httputil"
@@ -30,28 +29,17 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 }
 
 func (h *Handler) GetAllProjects(w http.ResponseWriter, r *http.Request) {
-	// Randomly choose between HTTP and gRPC (50/50 chance)
-	useGrpc := rand.Intn(2) == 0
+	if h.grpcClient == nil {
+		httputil.RespondWithError(w, http.StatusServiceUnavailable, "gRPC client not available")
+		return
+	}
 
-	var projects []Project
-	var err error
-
-	if useGrpc && h.grpcClient != nil {
-		h.logger.Info("fetching all projects from project-service via gRPC")
-		projects, err = h.grpcClient.GetAllProjects(r.Context())
-		if err != nil {
-			h.logger.Error("failed to fetch projects via gRPC", "error", err)
-			httputil.RespondWithError(w, http.StatusInternalServerError, "Failed to fetch projects via gRPC")
-			return
-		}
-	} else {
-		h.logger.Info("fetching all projects from project-service via HTTP")
-		projects, err = h.httpClient.GetAllProjects(r.Context())
-		if err != nil {
-			h.logger.Error("failed to fetch projects via HTTP", "error", err)
-			httputil.RespondWithError(w, http.StatusInternalServerError, "Failed to fetch projects via HTTP")
-			return
-		}
+	h.logger.Info("fetching all projects from project-service via gRPC")
+	projects, err := h.grpcClient.GetAllProjects(r.Context())
+	if err != nil {
+		h.logger.Error("failed to fetch projects via gRPC", "error", err)
+		httputil.RespondWithError(w, http.StatusInternalServerError, "Failed to fetch projects")
+		return
 	}
 
 	httputil.RespondWithJSON(w, http.StatusOK, projects)
