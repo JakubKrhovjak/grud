@@ -19,7 +19,7 @@ mkdir -p "${OUT_DIR}"
 
 echo -e "${GREEN}Generating to shared api/gen directory...${NC}"
 
-# Generate Go code
+# Generate Go code for project service
 protoc \
     --proto_path="${PROTO_DIR}" \
     --go_out="${OUT_DIR}" \
@@ -27,6 +27,15 @@ protoc \
     --go-grpc_out="${OUT_DIR}" \
     --go-grpc_opt=paths=source_relative \
     "${PROTO_DIR}/project/v1/project.proto"
+
+# Generate Go code for message service
+protoc \
+    --proto_path="${PROTO_DIR}" \
+    --go_out="${OUT_DIR}" \
+    --go_opt=paths=source_relative \
+    --go-grpc_out="${OUT_DIR}" \
+    --go-grpc_opt=paths=source_relative \
+    "${PROTO_DIR}/message/v1/message.proto"
 
 echo -e "${GREEN}✓ Generated protobuf files${NC}"
 echo -e "${BLUE}Done!${NC}"

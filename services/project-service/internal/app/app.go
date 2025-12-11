@@ -17,7 +17,8 @@ import (
 
 	"grud/common/logger"
 
-	pb "grud/api/gen/project/v1"
+	messagepb "grud/api/gen/message/v1"
+	projectpb "grud/api/gen/project/v1"
 
 	"github.com/gorilla/mux"
 	"google.golang.org/grpc"
@@ -62,8 +63,9 @@ func New() *App {
 	projectRepo := project.NewRepository(database)
 	projectService := project.NewService(projectRepo)
 
-	// Initialize message repository and Kafka consumer
+	// Initialize message repository, service and Kafka consumer
 	messageRepo := message.NewRepository(database)
+	messageService := message.NewService(messageRepo)
 	kafkaConsumer, err := kafka.NewConsumer(cfg.Kafka.Brokers, cfg.Kafka.Topic, messageRepo, slogLogger)
 	if err != nil {
 		log.Fatal("failed to create Kafka consumer:", err)
@@ -76,14 +78,17 @@ func New() *App {
 	healthHandler := health.NewHandler()
 	healthHandler.RegisterRoutes(app.router)
 
-	// HTTP Handler
+	// HTTP Handlers
 	projectHandler := project.NewHandler(projectService, slogLogger)
 	projectHandler.RegisterRoutes(app.router)
 
 	// gRPC Server
 	app.grpcServer = grpc.NewServer()
-	grpcHandler := project.NewGrpcServer(projectService, slogLogger)
-	pb.RegisterProjectServiceServer(app.grpcServer, grpcHandler)
+	projectGrpcHandler := project.NewGrpcServer(projectService, slogLogger)
+	projectpb.RegisterProjectServiceServer(app.grpcServer, projectGrpcHandler)
+
+	messageGrpcHandler := message.NewGrpcServer(messageService, slogLogger)
+	messagepb.RegisterMessageServiceServer(app.grpcServer, messageGrpcHandler)
 
 	slogLogger.Info("application initialized successfully")
 

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package message.v1;
+
+option go_package = "grud/api/gen/message/v1;messagev1";
+
+import "google/protobuf/timestamp.proto";
+
+// Message represents a message entity
+message Message {
+  int32 id = 1;
+  string email = 2;
+  string message = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+// GetMessagesByEmailRequest is the request message for GetMessagesByEmail RPC
+message GetMessagesByEmailRequest {
+  string email = 1;
+}
+
+// GetMessagesByEmailResponse is the response message for GetMessagesByEmail RPC
+message GetMessagesByEmailResponse {
+  repeated Message messages = 1;
+}
+
+// MessageService provides operations on messages
+service MessageService {
+  // GetMessagesByEmail returns messages filtered by email
+  rpc GetMessagesByEmail(GetMessagesByEmailRequest) returns (GetMessagesByEmailResponse);
+}
