@@ -169,3 +169,85 @@ func TestGetMessages(t *testing.T) {
 		assert.Len(t, response, 0)
 	})
 }
+
+func TestGetAllProjects(t *testing.T) {
+	t.Run("GetAllProjects_Success", func(t *testing.T) {
+		// Mock data
+		mockProjects := []projectclient.Project{
+			{
+				ID:        1,
+				Name:      "Project One",
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+			{
+				ID:        2,
+				Name:      "Project Two",
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}
+
+		mockClient := &mockGrpcClient{
+			projects: mockProjects,
+		}
+
+		router := chi.NewRouter()
+
+		// Create a test handler function that mimics the behavior
+		router.Get("/projects", func(w http.ResponseWriter, r *http.Request) {
+			projects, err := mockClient.GetAllProjects(r.Context())
+			if err != nil {
+				http.Error(w, `{"error":"Failed to fetch projects"}`, http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(projects)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/projects", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response []projectclient.Project
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Len(t, response, 2)
+		assert.Equal(t, "Project One", response[0].Name)
+		assert.Equal(t, "Project Two", response[1].Name)
+	})
+
+	t.Run("GetAllProjects_EmptyResult", func(t *testing.T) {
+		mockClient := &mockGrpcClient{
+			projects: []projectclient.Project{},
+		}
+
+		router := chi.NewRouter()
+		router.Get("/projects", func(w http.ResponseWriter, r *http.Request) {
+			projects, err := mockClient.GetAllProjects(r.Context())
+			if err != nil {
+				http.Error(w, `{"error":"Failed to fetch projects"}`, http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(projects)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/projects", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response []projectclient.Project
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Len(t, response, 0)
+	})
+}
