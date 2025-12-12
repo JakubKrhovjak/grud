@@ -52,6 +52,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Enable environment variable overrides
+	viper.AutomaticEnv()
+	viper.BindEnv("grpc.port", "GRPC_PORT")
+
 	// Unmarshal into struct
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

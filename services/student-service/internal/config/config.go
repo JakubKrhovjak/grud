@@ -57,6 +57,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Enable environment variable overrides
+	viper.AutomaticEnv()
+	viper.BindEnv("project_service.grpc", "PROJECT_SERVICE_GRPC")
+
 	// Unmarshal into struct
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
