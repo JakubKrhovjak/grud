@@ -5,6 +5,8 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - project-config.yaml
+  - student-config.yaml
 
 # Production-specific patches
 patches:
@@ -35,8 +37,23 @@ patches:
         path: /spec/replicas
         value: 3
 
-commonLabels:
-  environment: prod
+  # Set APP_ENV to prod for project-service
+  - target:
+      kind: Deployment
+      name: project-service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: prod
+
+  # Set APP_ENV to prod for student-service
+  - target:
+      kind: Deployment
+      name: student-service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: prod
 
 commonAnnotations:
   grud.io/environment: "prod"

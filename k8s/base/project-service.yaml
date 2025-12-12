@@ -62,6 +62,8 @@ spec:
             - name: grpc
               containerPort: 50052
           env:
+            - name: APP_ENV
+              value: "dev"
             - name: GRPC_PORT
               value: "50052"
             - name: DB_HOST

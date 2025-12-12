@@ -5,6 +5,8 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - project-config.yaml
+  - student-config.yaml
 
 # Development-specific patches
 patches:
@@ -23,9 +25,6 @@ patches:
       - op: replace
         path: /data/ENV
         value: dev
-
-commonLabels:
-  environment: dev
 
 commonAnnotations:
   grud.io/environment: "dev"
