@@ -1,12 +1,12 @@
-# Student Service Config File
+# Development Config
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: student-service-file-config
   namespace: grud
 data:
-  config.local.yaml: |
-    env: local
+  config.dev.yaml: |
+    env: dev
 
     server:
       port: "8080"
@@ -14,8 +14,6 @@ data:
     database:
       host: student-db.grud.svc.cluster.local
       port: "5432"
-      user: app
-      password: changeme123
       name: university
 
     project_service:

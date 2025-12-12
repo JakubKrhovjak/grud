@@ -6,6 +6,7 @@ kind: Kustomization
 resources:
   - ../../base
   - project-config.yaml
+  - student-config.yaml
 
 # Development-specific patches
 patches:
