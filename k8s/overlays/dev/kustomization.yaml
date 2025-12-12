@@ -5,6 +5,7 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - project-config.yaml
 
 # Development-specific patches
 patches:
