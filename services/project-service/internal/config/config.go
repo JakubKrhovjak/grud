@@ -41,20 +41,26 @@ func Load() (*Config, error) {
 	// Set up Viper
 	viper.SetConfigName(fmt.Sprintf("config.%s", env))
 	viper.SetConfigType("yaml")
+	viper.AddConfigPath("/configs")                           // Kubernetes mount
 	viper.AddConfigPath("./configs")                          // Docker runtime
 	viper.AddConfigPath("./services/project-service/configs") // IDE from root
 	viper.AddConfigPath("./project-service/configs")          // Legacy path
 	viper.AddConfigPath("../configs")                         // IDE from cmd/server
 	viper.AddConfigPath("../../configs")                      // IDE from other locations
 
-	// Read config file
+	// Try to read config file (optional - will use ENV if not found)
 	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		// Config file is optional - continue with ENV variables
+		fmt.Printf("No config file found (will use ENV variables): %v\n", err)
 	}
 
-	// Enable environment variable overrides
+	// Enable environment variable overrides (these take precedence over config file)
 	viper.AutomaticEnv()
-	viper.BindEnv("grpc.port", "GRPC_PORT")
+
+	// Bind ONLY sensitive data from environment variables (Secrets)
+	// Other config comes from the config file (ConfigMap)
+	viper.BindEnv("database.user", "DB_USER")
+	viper.BindEnv("database.password", "DB_PASSWORD")
 
 	// Unmarshal into struct
 	var config Config

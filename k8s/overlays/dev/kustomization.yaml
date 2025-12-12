@@ -26,8 +26,5 @@ patches:
         path: /data/ENV
         value: dev
 
-commonLabels:
-  environment: dev
-
 commonAnnotations:
   grud.io/environment: "dev"
