@@ -8,8 +8,6 @@ resources:
   - namespace.yaml
   - secrets.yaml
   - kafka.yaml
-  - student-config.yaml
-  - project-config.yaml
   - student-service.yaml
   - project-service.yaml
   - student-db.yaml

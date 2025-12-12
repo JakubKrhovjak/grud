@@ -93,6 +93,14 @@ test: ## Test services
 	@echo "$(YELLOW)Testing project-service:$(NC)"
 	@curl -s http://localhost:8081/api/projects | jq '.' || echo "Project service not responding"
 
+port-forward-student: ## Port-forward student-service to localhost:9080
+	@echo "$(BLUE)🔌 Port-forwarding student-service to localhost:9080...$(NC)"
+	@kubectl port-forward -n grud service/student-service 9080:8080
+
+port-forward-project: ## Port-forward project-service to localhost:9052
+	@echo "$(BLUE)🔌 Port-forwarding project-service to localhost:9052...$(NC)"
+	@kubectl port-forward -n grud service/project-service 9052:50052
+
 cleanup: ## Delete the entire cluster
 	@../scripts/cleanup.sh
 
