@@ -12,7 +12,7 @@ type Config struct {
 	Server         ServerConfig         `mapstructure:"server"`
 	Database       DatabaseConfig       `mapstructure:"database"`
 	ProjectService ProjectServiceConfig `mapstructure:"project_service"`
-	Kafka          KafkaConfig          `mapstructure:"kafka"`
+	NATS           NATSConfig           `mapstructure:"nats"`
 }
 
 type ServerConfig struct {
@@ -31,9 +31,9 @@ type DatabaseConfig struct {
 	DBName   string `mapstructure:"name"`
 }
 
-type KafkaConfig struct {
-	Brokers []string `mapstructure:"brokers"`
-	Topic   string   `mapstructure:"topic"`
+type NATSConfig struct {
+	URL     string `mapstructure:"url"`
+	Subject string `mapstructure:"subject"`
 }
 
 func Load() (*Config, error) {

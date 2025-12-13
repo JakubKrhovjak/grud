@@ -11,7 +11,7 @@ type Config struct {
 	Env      string         `mapstructure:"env"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Grpc     GrpcConfig     `mapstructure:"grpc"`
-	Kafka    KafkaConfig    `mapstructure:"kafka"`
+	NATS     NATSConfig     `mapstructure:"nats"`
 }
 
 type DatabaseConfig struct {
@@ -26,9 +26,9 @@ type GrpcConfig struct {
 	Port string `mapstructure:"port"`
 }
 
-type KafkaConfig struct {
-	Brokers []string `mapstructure:"brokers"`
-	Topic   string   `mapstructure:"topic"`
+type NATSConfig struct {
+	URL     string `mapstructure:"url"`
+	Subject string `mapstructure:"subject"`
 }
 
 func Load() (*Config, error) {
