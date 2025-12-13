@@ -12,6 +12,7 @@ import (
 	"project-service/internal/message"
 	"project-service/internal/messaging"
 
+	"grud/testing/testdb"
 	"grud/testing/testnats"
 
 	"github.com/nats-io/nats.go"
@@ -19,43 +20,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockMessageRepository for testing
-type MockMessageRepository struct {
-	messages []*message.Message
-}
-
-func (m *MockMessageRepository) Create(ctx context.Context, msg *message.Message) error {
-	msg.ID = len(m.messages) + 1
-	m.messages = append(m.messages, msg)
-	return nil
-}
-
-func (m *MockMessageRepository) GetByEmail(ctx context.Context, email string) ([]*message.Message, error) {
-	var results []*message.Message
-	for _, msg := range m.messages {
-		if msg.Email == email {
-			results = append(results, msg)
-		}
-	}
-	return results, nil
-}
-
 func TestNATSConsumerIntegration(t *testing.T) {
 	natsContainer := testnats.SetupSharedNATS(t)
 	defer natsContainer.Cleanup(t)
 
-	t.Run("Consumer_ReceivesAndStoresMessage", func(t *testing.T) {
-		natsURL := natsContainer.URL
+	pgContainer := testdb.SetupSharedPostgres(t)
+	defer pgContainer.Cleanup(t)
 
+	pgContainer.RunMigrations(t, (*message.Message)(nil))
+
+	t.Run("Consumer_ReceivesAndStoresMessage", func(t *testing.T) {
+		testdb.CleanupTables(t, pgContainer.DB, "messages")
+
+		natsURL := natsContainer.URL
 		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 		subject := "test.messages." + strings.ReplaceAll(t.Name(), "/", ".")
-		repo := &MockMessageRepository{messages: make([]*message.Message, 0)}
+		repo := message.NewRepository(pgContainer.DB)
 
 		// Create consumer
 		consumer, err := messaging.NewConsumer(natsURL, subject, repo, logger)
 		require.NoError(t, err)
-		defer consumer.Close()
+		t.Cleanup(func() { _ = consumer.Close() })
 
 		// Start consumer in background
 		ctx, cancel := context.WithCancel(context.Background())
@@ -95,16 +81,17 @@ func TestNATSConsumerIntegration(t *testing.T) {
 	})
 
 	t.Run("Consumer_MultipleMessages", func(t *testing.T) {
-		natsURL := natsContainer.URL
+		testdb.CleanupTables(t, pgContainer.DB, "messages")
 
+		natsURL := natsContainer.URL
 		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 		subject := "test.messages." + strings.ReplaceAll(t.Name(), "/", ".")
-		repo := &MockMessageRepository{messages: make([]*message.Message, 0)}
+		repo := message.NewRepository(pgContainer.DB)
 
 		consumer, err := messaging.NewConsumer(natsURL, subject, repo, logger)
 		require.NoError(t, err)
-		defer consumer.Close()
+		t.Cleanup(func() { _ = consumer.Close() })
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -125,8 +112,10 @@ func TestNATSConsumerIntegration(t *testing.T) {
 				Email:   "user@example.com",
 				Message: "Message " + string(rune(i)),
 			}
-			data, _ := json.Marshal(event)
-			nc.Publish(subject, data)
+			data, err := json.Marshal(event)
+			require.NoError(t, err)
+			err = nc.Publish(subject, data)
+			require.NoError(t, err)
 		}
 
 		// Wait for all messages to be processed
@@ -138,16 +127,17 @@ func TestNATSConsumerIntegration(t *testing.T) {
 	})
 
 	t.Run("Consumer_InvalidJSON", func(t *testing.T) {
-		natsURL := natsContainer.URL
+		testdb.CleanupTables(t, pgContainer.DB, "messages")
 
+		natsURL := natsContainer.URL
 		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 		subject := "test.messages." + strings.ReplaceAll(t.Name(), "/", ".")
-		repo := &MockMessageRepository{messages: make([]*message.Message, 0)}
+		repo := message.NewRepository(pgContainer.DB)
 
 		consumer, err := messaging.NewConsumer(natsURL, subject, repo, logger)
 		require.NoError(t, err)
-		defer consumer.Close()
+		t.Cleanup(func() { _ = consumer.Close() })
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
