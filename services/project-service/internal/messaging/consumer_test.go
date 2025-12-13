@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -28,28 +27,19 @@ func TestNATSConsumerIntegration(t *testing.T) {
 	defer pgContainer.Cleanup(t)
 
 	pgContainer.RunMigrations(t, (*message.Message)(nil))
+
 	natsURL := natsContainer.URL
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-	subject := "test.messages." + strings.ReplaceAll(t.Name(), "/", ".")
+	subject := "test.messages"
 	repo := message.NewRepository(pgContainer.DB)
 
-	consumer, err := messaging.NewConsumer(natsURL, subject, repo, logger)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = consumer.Close() })
+	consumer, _ := messaging.NewConsumer(natsURL, subject, repo, logger)
+	startConsumer(consumer)
+	defer func() { _ = consumer.Close() }()
+	time.Sleep(100 * time.Millisecond)
 
 	t.Run("Consumer_ReceivesAndStoresMessage", func(t *testing.T) {
 		testdb.CleanupTables(t, pgContainer.DB, "messages")
-		// Start consumer in background
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		go func() {
-			_ = consumer.Start(ctx)
-		}()
-
-		// Wait for consumer to be ready
-		time.Sleep(100 * time.Millisecond)
 
 		// Publish a message
 		nc, err := nats.Connect(natsURL)
@@ -80,15 +70,6 @@ func TestNATSConsumerIntegration(t *testing.T) {
 	t.Run("Consumer_MultipleMessages", func(t *testing.T) {
 		testdb.CleanupTables(t, pgContainer.DB, "messages")
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		go func() {
-			_ = consumer.Start(ctx)
-		}()
-
-		time.Sleep(100 * time.Millisecond)
-
 		// Publish multiple messages
 		nc, err := nats.Connect(natsURL)
 		require.NoError(t, err)
@@ -116,15 +97,6 @@ func TestNATSConsumerIntegration(t *testing.T) {
 	t.Run("Consumer_InvalidJSON", func(t *testing.T) {
 		testdb.CleanupTables(t, pgContainer.DB, "messages")
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		go func() {
-			_ = consumer.Start(ctx)
-		}()
-
-		time.Sleep(100 * time.Millisecond)
-
 		// Publish invalid JSON
 		nc, err := nats.Connect(natsURL)
 		require.NoError(t, err)
@@ -140,4 +112,13 @@ func TestNATSConsumerIntegration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, messages, 0)
 	})
+}
+
+func startConsumer(consumer *messaging.Consumer) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = consumer.Start(ctx)
+	}()
 }
