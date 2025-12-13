@@ -59,7 +59,6 @@ func New() *App {
 	projectRepo := project.NewRepository(database)
 	projectService := project.NewService(projectRepo)
 
-	// Initialize message repository, service and Kafka consumer
 	messageRepo := message.NewRepository(database)
 	messageService := message.NewService(messageRepo)
 	kafkaConsumer, err := kafka.NewConsumer(cfg.Kafka.Brokers, cfg.Kafka.Topic, messageRepo, slogLogger)

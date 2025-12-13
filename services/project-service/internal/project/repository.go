@@ -28,7 +28,7 @@ func (r *repository) Create(ctx context.Context, project *Project) error {
 	if err != nil {
 		return err
 	}
-	// Reload to get DB-generated timestamps
+
 	return r.db.NewSelect().Model(project).WherePK().Scan(ctx)
 }
 
