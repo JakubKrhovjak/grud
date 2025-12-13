@@ -70,17 +70,10 @@ func (r *repository) Update(ctx context.Context, project *Project) error {
 }
 
 func (r *repository) Delete(ctx context.Context, id int) error {
-	project := &Project{ID: id}
-	result, err := r.db.NewDelete().Model(project).WherePK().Exec(ctx)
+	_, err := r.db.NewDelete().Model(&Project{ID: id}).WherePK().Exec(ctx)
 	if err != nil {
 		return err
 	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return ErrProjectNotFound
-	}
+
 	return nil
 }
