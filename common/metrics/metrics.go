@@ -12,6 +12,7 @@ type Metrics struct {
 	Database  *DatabaseMetrics
 	Messaging *MessagingMetrics
 	Health    *HealthMetrics
+	Grpc      *GrpcMetrics
 	logger    *slog.Logger
 }
 
@@ -38,6 +39,11 @@ func New(ctx context.Context, serviceName string, logger *slog.Logger) (*Metrics
 		return nil, err
 	}
 
+	grpcMetrics, err := NewGrpcMetrics(meter)
+	if err != nil {
+		return nil, err
+	}
+
 	logger.Info("metrics collectors initialized successfully")
 
 	return &Metrics{
@@ -45,6 +51,7 @@ func New(ctx context.Context, serviceName string, logger *slog.Logger) (*Metrics
 		Database:  database,
 		Messaging: messaging,
 		Health:    health,
+		Grpc:      grpcMetrics,
 		logger:    logger,
 	}, nil
 }
@@ -57,5 +64,6 @@ func NewMock() *Metrics {
 		Messaging: &MessagingMetrics{},
 		Health:    &HealthMetrics{},
 		Runtime:   &RuntimeMetrics{},
+		Grpc:      &GrpcMetrics{},
 	}
 }
