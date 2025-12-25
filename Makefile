@@ -61,9 +61,6 @@ test-project:
 	@echo "🧪 Testing project-service..."
 	@go test ./services/project-service/...
 
-# Integration tests (isolated containers, slower)
-test-integration:
-	mak
 k8s/port-forward-project:
 	@$(MAKE) -C k8s port-forward-project
 

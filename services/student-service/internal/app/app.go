@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
+	systemLog "log"
 	"log/slog"
 	"net/http"
 	"time"
@@ -43,10 +43,10 @@ type App struct {
 }
 
 func New() *App {
-	slogLogger := logger.NewWithServiceContext(ServiceName, Version)
-	slog.SetDefault(slogLogger)
+	log := logger.NewWithServiceContext(ServiceName, Version)
+	slog.SetDefault(log)
 
-	slogLogger.Info("initializing application",
+	log.Info("initializing application",
 		"service", ServiceName,
 		"version", Version,
 		"commit", GitCommit,
@@ -55,19 +55,19 @@ func New() *App {
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		systemLog.Fatalf("failed to load config: %v", err)
 	}
 
-	slogLogger.Info("config loaded", "env", cfg.Env)
+	log.Info("config loaded", "env", cfg.Env)
 
 	// Initialize OTel telemetry and metrics
 	ctx := context.Background()
-	telem, _ := telemetry.Init(ctx, ServiceName, Version, cfg.Env, slogLogger)
+	telem, _ := telemetry.Init(ctx, ServiceName, Version, cfg.Env, log)
 
 	app := &App{
 		config:    cfg,
 		router:    chi.NewRouter(),
-		logger:    slogLogger,
+		logger:    log,
 		telemetry: telem,
 	}
 
@@ -77,7 +77,7 @@ func New() *App {
 		meter := otel.Meter(ServiceName)
 		serviceMetrics, err := localmetrics.New(meter)
 		if err != nil {
-			slogLogger.Warn("failed to initialize service metrics", "error", err)
+			log.Warn("failed to initialize service metrics", "error", err)
 		}
 		app.serviceMetrics = serviceMetrics
 	}
@@ -85,7 +85,7 @@ func New() *App {
 	database := db.New(cfg.Database)
 	app.database = database
 	if err := db.RunMigrations(ctx, database, (*student.Student)(nil), (*auth.RefreshToken)(nil)); err != nil {
-		log.Fatal("failed to run migrations:", err)
+		systemLog.Fatal("failed to run migrations:", err)
 	}
 
 	// Register database for metrics collection
@@ -93,13 +93,13 @@ func New() *App {
 		meter := otel.Meter(ServiceName)
 		sqlDB := database.DB
 		if err := app.metrics.Database.RegisterDB(sqlDB, meter); err != nil {
-			slogLogger.Warn("failed to register database metrics", "error", err)
+			log.Warn("failed to register database metrics", "error", err)
 		}
 
 		// Register dependencies for health monitoring
 		dependencies := []string{"postgres", "nats", "project-service"}
 		if err := app.metrics.Health.RegisterDependencies(ctx, meter, dependencies); err != nil {
-			slogLogger.Warn("failed to register dependencies", "error", err)
+			log.Warn("failed to register dependencies", "error", err)
 		}
 	}
 
@@ -121,50 +121,50 @@ func New() *App {
 	studentRepo := student.NewRepository(database, app.metrics)
 	authRepo := auth.NewRepository(database, app.metrics)
 	authService := auth.NewService(authRepo, studentRepo)
-	authHandler := auth.NewHandler(authService, slogLogger)
+	authHandler := auth.NewHandler(authService, log)
 	authHandler.RegisterRoutes(app.router)
 
 	// Student endpoints (auth required)
 	studentService := student.NewService(studentRepo)
-	studentHandler := student.NewHandler(studentService, slogLogger, app.serviceMetrics)
+	studentHandler := student.NewHandler(studentService, log, app.serviceMetrics)
 
 	// Project client endpoints (auth required)
 	grpcClient, err := projectclient.NewGrpcClient(cfg.ProjectService.GrpcAddress)
 	if err != nil {
-		slogLogger.Warn("failed to initialize gRPC client", "error", err)
+		log.Warn("failed to initialize gRPC client", "error", err)
 		grpcClient = nil
 	} else {
-		slogLogger.Info("gRPC client initialized successfully")
+		log.Info("gRPC client initialized successfully")
 	}
 	app.grpcClient = grpcClient
 
-	projectHandler := projectclient.NewHandler(grpcClient, slogLogger, app.serviceMetrics)
+	projectHandler := projectclient.NewHandler(grpcClient, log, app.serviceMetrics)
 
 	// NATS producer setup
-	natsProducer, err := messaging.NewProducer(cfg.NATS.URL, cfg.NATS.Subject, slogLogger)
+	natsProducer, err := messaging.NewProducer(cfg.NATS.URL, cfg.NATS.Subject, log)
 	if err != nil {
-		slogLogger.Warn("failed to initialize NATS producer", "error", err)
+		log.Warn("failed to initialize NATS producer", "error", err)
 		natsProducer = nil
 	} else {
-		slogLogger.Info("NATS producer initialized successfully")
+		log.Info("NATS producer initialized successfully")
 	}
 	app.natsProducer = natsProducer
 
 	// Create protected routes group for /api endpoints
 	app.router.Route("/api", func(r chi.Router) {
-		r.Use(auth.AuthMiddleware(slogLogger))
+		r.Use(auth.AuthMiddleware(log))
 		studentHandler.RegisterRoutes(r)
 		projectHandler.RegisterRoutes(r)
 
 		// Message handler (only if NATS is available)
 		if natsProducer != nil {
-			messageService := message.NewService(natsProducer, slogLogger)
-			messageHandler := message.NewHandler(messageService, slogLogger, app.serviceMetrics)
+			messageService := message.NewService(natsProducer, log)
+			messageHandler := message.NewHandler(messageService, log, app.serviceMetrics)
 			messageHandler.RegisterRoutes(r)
 		}
 	})
 
-	slogLogger.Info("application initialized successfully")
+	log.Info("application initialized successfully")
 
 	return app
 }

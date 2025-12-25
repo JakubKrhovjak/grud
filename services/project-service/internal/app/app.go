@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
+	systemLog "log"
 	"log/slog"
 	"net"
 	"time"
@@ -42,12 +42,12 @@ type App struct {
 }
 
 func New() *App {
-	slogLogger := logger.NewWithServiceContext(ServiceName, Version)
+	log := logger.NewWithServiceContext(ServiceName, Version)
 
 	// Set as default logger so slog.Info() uses JSON format
-	slog.SetDefault(slogLogger)
+	slog.SetDefault(log)
 
-	slogLogger.Info("initializing application",
+	log.Info("initializing application",
 		"service", ServiceName,
 		"version", Version,
 		"commit", GitCommit,
@@ -56,17 +56,17 @@ func New() *App {
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		systemLog.Fatalf("failed to load config: %v", err)
 	}
-	slogLogger.Info("config loaded", "env", cfg.Env)
+	log.Info("config loaded", "env", cfg.Env)
 
 	// Initialize OTel telemetry and metrics
 	ctx := context.Background()
-	telem, _ := telemetry.Init(ctx, ServiceName, Version, cfg.Env, slogLogger)
+	telem, _ := telemetry.Init(ctx, ServiceName, Version, cfg.Env, log)
 
 	app := &App{
 		config:    cfg,
-		logger:    slogLogger,
+		logger:    log,
 		telemetry: telem,
 	}
 
@@ -76,7 +76,7 @@ func New() *App {
 		meter := otel.Meter(ServiceName)
 		serviceMetrics, err := localmetrics.New(meter)
 		if err != nil {
-			slogLogger.Warn("failed to initialize service metrics", "error", err)
+			log.Warn("failed to initialize service metrics", "error", err)
 		}
 		app.serviceMetrics = serviceMetrics
 	}
@@ -84,7 +84,7 @@ func New() *App {
 	database := db.New(cfg.Database)
 	app.database = database
 	if err := db.RunMigrations(ctx, database, (*project.Project)(nil), (*message.Message)(nil)); err != nil {
-		log.Fatal("failed to run migrations:", err)
+		systemLog.Fatal("failed to run migrations:", err)
 	}
 
 	// Register database for metrics collection
@@ -92,13 +92,13 @@ func New() *App {
 		meter := otel.Meter(ServiceName)
 		sqlDB := database.DB
 		if err := app.metrics.Database.RegisterDB(sqlDB, meter); err != nil {
-			slogLogger.Warn("failed to register database metrics", "error", err)
+			log.Warn("failed to register database metrics", "error", err)
 		}
 
 		// Register dependencies for health monitoring
 		dependencies := []string{"postgres", "nats"}
 		if err := app.metrics.Health.RegisterDependencies(ctx, meter, dependencies); err != nil {
-			slogLogger.Warn("failed to register dependencies", "error", err)
+			log.Warn("failed to register dependencies", "error", err)
 		}
 	}
 
@@ -107,26 +107,32 @@ func New() *App {
 
 	messageRepo := message.NewRepository(database, app.metrics)
 	messageService := message.NewService(messageRepo)
-	natsConsumer, err := messaging.NewConsumer(cfg.NATS.URL, cfg.NATS.Subject, messageRepo, slogLogger, app.serviceMetrics)
+	natsConsumer, err := messaging.NewConsumer(cfg.NATS.URL, cfg.NATS.Subject, messageRepo, log, app.serviceMetrics)
 	if err != nil {
-		log.Fatal("failed to create NATS consumer:", err)
+		systemLog.Fatal("failed to create NATS consumer:", err)
 	}
-	slogLogger.Info("NATS consumer initialized", "url", cfg.NATS.URL, "subject", cfg.NATS.Subject)
+	log.Info("NATS consumer initialized", "url", cfg.NATS.URL, "subject", cfg.NATS.Subject)
 
 	app.natsConsumer = natsConsumer
 
-	// gRPC Server with OTel instrumentation
+	// gRPC Server with OTel instrumentation and golden signals
 	var grpcOpts []grpc.ServerOption
-	if telem != nil {
+
+	grpcOpts = append(grpcOpts,
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
+	// Add golden signals interceptor
+	if app.metrics.Grpc != nil {
 		grpcOpts = append(grpcOpts,
-			grpc.StatsHandler(otelgrpc.NewServerHandler()),
+			grpc.ChainUnaryInterceptor(app.metrics.Grpc.UnaryServerInterceptor()),
 		)
 	}
+
 	app.grpcServer = grpc.NewServer(grpcOpts...)
-	projectGrpcHandler := project.NewGrpcServer(projectService, slogLogger, app.serviceMetrics)
+	projectGrpcHandler := project.NewGrpcServer(projectService, log, app.serviceMetrics)
 	projectpb.RegisterProjectServiceServer(app.grpcServer, projectGrpcHandler)
 
-	messageGrpcHandler := message.NewGrpcServer(messageService, slogLogger)
+	messageGrpcHandler := message.NewGrpcServer(messageService, log)
 	messagepb.RegisterMessageServiceServer(app.grpcServer, messageGrpcHandler)
 
 	// Register gRPC health check
@@ -136,7 +142,7 @@ func New() *App {
 	healthServer.SetServingStatus("project.v1.ProjectService", grpc_health_v1.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus("message.v1.MessageService", grpc_health_v1.HealthCheckResponse_SERVING)
 
-	slogLogger.Info("application initialized successfully")
+	log.Info("application initialized successfully")
 
 	return app
 }
