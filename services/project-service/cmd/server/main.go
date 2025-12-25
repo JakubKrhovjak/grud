@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
-	"log"
+	systemLog "log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"project-service/internal/app"
+
+	"github.com/rs/zerolog/log"
 )
 
 func main() {
@@ -22,7 +24,7 @@ func main() {
 
 	go func() {
 		if err := application.Run(); err != nil {
-			log.Fatal("Failed to start server:", err)
+			log.Fatal().Err(err).Msg("Failed to start server")
 		}
 	}()
 
@@ -34,8 +36,8 @@ func main() {
 	defer cancel()
 
 	if err := application.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		systemLog.Fatal("Server forced to shutdown:", err)
 	}
 
-	log.Println("Server exited gracefully")
+	systemLog.Println("Server exited gracefully")
 }
