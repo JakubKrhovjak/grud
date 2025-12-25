@@ -76,7 +76,18 @@ grafana:
           type: prometheus
           url: http://prometheus-kube-prometheus-prometheus:9090
           access: proxy
+          isDefault: true
+        - name: Loki
+          type: loki
+          url: http://loki-gateway.infra.svc.cluster.local
+          access: proxy
           isDefault: false
+          jsonData:
+            derivedFields:
+              - name: TraceID
+                matcherRegex: '"trace_id":"([a-f0-9]+)"'
+                url: '$${__value.raw}'
+                datasourceUid: tempo
 
   # Enable persistence for dashboards
   persistence:

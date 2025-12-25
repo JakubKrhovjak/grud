@@ -109,6 +109,7 @@ infra/setup:
 	@echo "📦 Adding Helm repositories..."
 	@helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	@helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+	@helm repo add grafana https://grafana.github.io/helm-charts
 	@helm repo update
 	@echo "✅ Helm repositories added"
 
@@ -121,6 +122,7 @@ infra/deploy-prometheus:
 		--wait
 	@echo "📊 Deploying Grafana dashboards..."
 	@kubectl apply -f k8s/infra/grafana-dashboard-configmap.yaml
+	@kubectl apply -f k8s/infra/grafana-logs-dashboard-configmap.yaml
 	@echo "✅ Prometheus stack deployed"
 	@echo "📊 Grafana: http://localhost:30300 (admin/admin)"
 
@@ -139,7 +141,25 @@ infra/deploy-nats:
 	@kubectl apply -f k8s/infra/nats.yaml
 	@echo "✅ NATS deployed"
 
-infra/deploy: infra/setup infra/deploy-prometheus infra/deploy-otel infra/deploy-nats
+infra/deploy-loki:
+	@echo "📝 Deploying Loki (logging)..."
+	@kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
+	@helm upgrade --install loki grafana/loki \
+		-n infra \
+		-f k8s/infra/loki-values.yaml \
+		--wait
+	@helm upgrade --install promtail grafana/promtail \
+		-n infra \
+		-f k8s/infra/promtail-values.yaml \
+		--wait
+	@echo "✅ Loki stack deployed"
+
+infra/deploy-alerts:
+	@echo "🚨 Deploying alerting rules..."
+	@kubectl apply -f k8s/infra/alerting-rules.yaml
+	@echo "✅ Alerting rules deployed"
+
+infra/deploy: infra/setup infra/deploy-prometheus infra/deploy-otel infra/deploy-nats infra/deploy-loki infra/deploy-alerts
 	@echo "✅ Full observability stack deployed"
 
 infra/status:
@@ -148,9 +168,12 @@ infra/status:
 
 infra/cleanup:
 	@echo "🧹 Cleaning up observability stack..."
+	@helm uninstall promtail -n infra 2>/dev/null || true
+	@helm uninstall loki -n infra 2>/dev/null || true
 	@helm uninstall prometheus -n infra 2>/dev/null || true
 	@helm uninstall otel-collector -n infra 2>/dev/null || true
 	@kubectl delete -f k8s/infra/nats.yaml 2>/dev/null || true
+	@kubectl delete -f k8s/infra/alerting-rules.yaml 2>/dev/null || true
 	@kubectl delete namespace infra 2>/dev/null || true
 	@echo "✅ Cleanup complete"
 
@@ -200,10 +223,12 @@ help:
 	@echo ""
 	@echo "Observability:"
 	@echo "  make infra/setup            - Add Helm repositories"
-	@echo "  make infra/deploy           - Deploy full infra stack (Prometheus + OTel + NATS)"
+	@echo "  make infra/deploy           - Deploy full infra stack (Prometheus + OTel + NATS + Loki)"
 	@echo "  make infra/deploy-prometheus - Deploy Prometheus stack only"
 	@echo "  make infra/deploy-otel      - Deploy OTel Collector only"
 	@echo "  make infra/deploy-nats      - Deploy NATS only"
+	@echo "  make infra/deploy-loki      - Deploy Loki logging stack"
+	@echo "  make infra/deploy-alerts    - Deploy alerting rules"
 	@echo "  make infra/status           - Show infra pods status"
 	@echo "  make infra/port-forward-grafana    - Port-forward Grafana to localhost:3000"
 	@echo "  make infra/port-forward-prometheus - Port-forward Prometheus to localhost:9090"

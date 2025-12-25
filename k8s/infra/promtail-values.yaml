@@ -1,0 +1,38 @@
+# Promtail Helm values for GRUD project
+# Collects logs from all pods and sends to Loki
+
+# Run on all nodes
+tolerations:
+  - operator: Exists
+
+# Loki endpoint
+config:
+  clients:
+    - url: http://loki-gateway.infra.svc.cluster.local/loki/api/v1/push
+
+  snippets:
+    pipelineStages:
+      # Parse container runtime logs
+      - cri: {}
+      # Try to parse JSON logs from GRUD services
+      - match:
+          selector: '{namespace="grud"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  msg: msg
+                  service: service
+                  trace_id: trace_id
+                  error: error
+            - labels:
+                level:
+                service:
+            - output:
+                source: msg
+
+# ServiceMonitor for Prometheus
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
