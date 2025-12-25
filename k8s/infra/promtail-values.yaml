@@ -1,9 +1,23 @@
 # Promtail Helm values for GRUD project
 # Collects logs from all pods and sends to Loki
 
-# Run on all nodes
+# Run as Deployment instead of DaemonSet (single replica)
+daemonset:
+  enabled: false
+
+deployment:
+  enabled: true
+  replicas: 1
+
+# Run on infra node only
+nodeSelector:
+  node-type: infra
+
 tolerations:
-  - operator: Exists
+  - key: "workload"
+    operator: "Equal"
+    value: "infra"
+    effect: "NoSchedule"
 
 # Loki endpoint
 config:
