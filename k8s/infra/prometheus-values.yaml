@@ -88,6 +88,24 @@ grafana:
                 matcherRegex: '"trace_id":"([a-f0-9]+)"'
                 url: '$${__value.raw}'
                 datasourceUid: tempo
+        - name: Tempo
+          type: tempo
+          uid: tempo
+          url: http://tempo.infra.svc.cluster.local:3100
+          access: proxy
+          isDefault: false
+          jsonData:
+            tracesToLogsV2:
+              datasourceUid: loki
+              filterByTraceID: true
+            tracesToMetrics:
+              datasourceUid: prometheus
+            serviceMap:
+              datasourceUid: prometheus
+            nodeGraph:
+              enabled: true
+            lokiSearch:
+              datasourceUid: loki
 
   # Enable persistence for dashboards
   persistence:

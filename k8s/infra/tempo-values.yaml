@@ -1,0 +1,41 @@
+# Tempo Helm values for GRUD project
+# Distributed tracing backend
+
+# Single binary mode (simpler for dev/small clusters)
+tempo:
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+
+  retention: 168h  # 7 days
+
+# Run on infra node
+nodeSelector:
+  node-type: infra
+
+tolerations:
+  - key: "workload"
+    operator: "Equal"
+    value: "infra"
+    effect: "NoSchedule"
+
+# Persistence
+persistence:
+  enabled: true
+  size: 10Gi
+
+# Service for OTel Collector to send traces
+service:
+  type: ClusterIP

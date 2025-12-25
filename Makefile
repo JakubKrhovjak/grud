@@ -154,12 +154,21 @@ infra/deploy-loki:
 		--wait
 	@echo "✅ Loki stack deployed"
 
+infra/deploy-tempo:
+	@echo "🔍 Deploying Tempo (tracing)..."
+	@kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
+	@helm upgrade --install tempo grafana/tempo \
+		-n infra \
+		-f k8s/infra/tempo-values.yaml \
+		--wait
+	@echo "✅ Tempo deployed"
+
 infra/deploy-alerts:
 	@echo "🚨 Deploying alerting rules..."
 	@kubectl apply -f k8s/infra/alerting-rules.yaml
 	@echo "✅ Alerting rules deployed"
 
-infra/deploy: infra/setup infra/deploy-prometheus infra/deploy-otel infra/deploy-nats infra/deploy-loki infra/deploy-alerts
+infra/deploy: infra/setup infra/deploy-prometheus infra/deploy-otel infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts
 	@echo "✅ Full observability stack deployed"
 
 infra/status:
@@ -170,6 +179,7 @@ infra/cleanup:
 	@echo "🧹 Cleaning up observability stack..."
 	@helm uninstall promtail -n infra 2>/dev/null || true
 	@helm uninstall loki -n infra 2>/dev/null || true
+	@helm uninstall tempo -n infra 2>/dev/null || true
 	@helm uninstall prometheus -n infra 2>/dev/null || true
 	@helm uninstall otel-collector -n infra 2>/dev/null || true
 	@kubectl delete -f k8s/infra/nats.yaml 2>/dev/null || true
@@ -228,6 +238,7 @@ help:
 	@echo "  make infra/deploy-otel      - Deploy OTel Collector only"
 	@echo "  make infra/deploy-nats      - Deploy NATS only"
 	@echo "  make infra/deploy-loki      - Deploy Loki logging stack"
+	@echo "  make infra/deploy-tempo     - Deploy Tempo tracing"
 	@echo "  make infra/deploy-alerts    - Deploy alerting rules"
 	@echo "  make infra/status           - Show infra pods status"
 	@echo "  make infra/port-forward-grafana    - Port-forward Grafana to localhost:3000"
