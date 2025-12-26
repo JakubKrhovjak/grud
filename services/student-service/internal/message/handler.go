@@ -38,7 +38,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	// Get email from auth context
 	email, ok := auth.GetEmail(r.Context())
 	if !ok {
-		h.logger.Warn("email not found in context")
+		h.logger.WarnContext(r.Context(), "email not found in context")
 		httputil.RespondWithError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -56,7 +56,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("sending message", "email", email, "message", req.Message)
+	h.logger.InfoContext(r.Context(), "sending message", "email", email, "message", req.Message)
 
 	// Send message via service
 	if err := h.service.SendMessage(email, req.Message); err != nil {
