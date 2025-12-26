@@ -9,6 +9,8 @@ defaultRules:
 prometheus:
   prometheusSpec:
     retention: 7d
+    # Enable remote write receiver for Tempo metrics-generator
+    enableRemoteWriteReceiver: true
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -67,45 +69,9 @@ grafana:
   initChownData:
     enabled: false
 
-  # Default datasources
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-        - name: Prometheus
-          type: prometheus
-          url: http://prometheus-kube-prometheus-prometheus:9090
-          access: proxy
-          isDefault: false
-        - name: Loki
-          type: loki
-          url: http://loki-gateway.infra.svc.cluster.local
-          access: proxy
-          isDefault: false
-          jsonData:
-            derivedFields:
-              - name: TraceID
-                matcherRegex: '"trace_id":"([a-f0-9]+)"'
-                url: '$${__value.raw}'
-                datasourceUid: tempo
-        - name: Tempo
-          type: tempo
-          uid: tempo
-          url: http://tempo.infra.svc.cluster.local:3100
-          access: proxy
-          isDefault: false
-          jsonData:
-            tracesToLogsV2:
-              datasourceUid: loki
-              filterByTraceID: true
-            tracesToMetrics:
-              datasourceUid: prometheus
-            serviceMap:
-              datasourceUid: prometheus
-            nodeGraph:
-              enabled: true
-            lokiSearch:
-              datasourceUid: loki
+  # Datasources are managed via ConfigMap with grafana_datasource label
+  # See k8s/infra/grafana-datasources.yaml for Loki and Tempo
+  # Prometheus and Alertmanager are added by kube-prometheus-stack automatically
 
   # Enable persistence for dashboards
   persistence:

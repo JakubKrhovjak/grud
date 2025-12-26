@@ -21,6 +21,23 @@ tempo:
 
   retention: 168h  # 7 days
 
+  # Metrics generator - required for TraceQL rate() queries
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://prometheus-kube-prometheus-prometheus.infra:9090/api/v1/write"
+
+  # Enable processors for metrics generation
+  # - service-graphs: dependency maps between services
+  # - span-metrics: RED metrics (rate, errors, duration)
+  # - local-blocks: required for TraceQL metrics queries (rate() in Grafana)
+  overrides:
+    defaults:
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
+          - local-blocks
+
 # Run on infra node
 nodeSelector:
   node-type: infra

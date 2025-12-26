@@ -31,12 +31,12 @@ config:
                   msg: msg
                   service: service
                   trace_id: trace_id
+                  span_id: span_id
                   error: error
             - labels:
                 level:
                 service:
-            - output:
-                source: msg
+            # Keep full JSON log line for trace correlation (derived fields in Grafana)
 
 # ServiceMonitor for Prometheus
 serviceMonitor:
