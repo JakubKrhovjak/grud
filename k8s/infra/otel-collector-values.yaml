@@ -1,33 +1,25 @@
 # OpenTelemetry Collector Helm values for GRUD project
-# Receives OTLP metrics from Go services and exports to Prometheus
+# Unified telemetry: logs, traces, metrics
 
-mode: deployment
+# DaemonSet mode for log collection from all nodes
+mode: daemonset
 
-# Image configuration
+# Use contrib image (has filelog receiver and loki exporter)
 image:
   repository: otel/opentelemetry-collector-contrib
 
-# Resources
+# Resources (increased for log processing)
 resources:
   limits:
     cpu: 500m
     memory: 512Mi
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 256Mi
 
-# Replicas
-replicaCount: 1
-
-# Schedule on infra node
-nodeSelector:
-  node-type: infra
-
+# Tolerate all taints to run on every node
 tolerations:
-  - key: "workload"
-    operator: "Equal"
-    value: "infra"
-    effect: "NoSchedule"
+  - operator: "Exists"
 
 # Service configuration
 service:
@@ -35,35 +27,40 @@ service:
 
 # Ports
 ports:
-  # OTLP gRPC receiver (services send metrics here)
   otlp:
     enabled: true
     containerPort: 4317
     servicePort: 4317
     protocol: TCP
-  # OTLP HTTP receiver
   otlp-http:
     enabled: true
     containerPort: 4318
     servicePort: 4318
     protocol: TCP
-  # Prometheus metrics endpoint (for scraping)
   prometheus:
     enabled: true
     containerPort: 8888
     servicePort: 8888
     protocol: TCP
-  # Prometheus exporter (exports scraped metrics)
   prom-exporter:
     enabled: true
     containerPort: 8889
     servicePort: 8889
     protocol: TCP
 
+# Presets for Kubernetes log/metadata collection
+presets:
+  logsCollection:
+    enabled: true
+    includeCollectorLogs: false
+  kubernetesAttributes:
+    enabled: true
+    extractAllPodLabels: true
+    extractAllPodAnnotations: false
+
 # OpenTelemetry Collector configuration
 config:
   receivers:
-    # Receive OTLP metrics from Go services
     otlp:
       protocols:
         grpc:
@@ -72,41 +69,64 @@ config:
           endpoint: 0.0.0.0:4318
 
   processors:
-    # Batch processor for better performance
     batch:
-      timeout: 10s
+      timeout: 5s
       send_batch_size: 1024
 
-    # Add resource attributes
     resource:
       attributes:
         - key: cluster.name
           value: grud-cluster
           action: upsert
 
-    # Memory limiter to prevent OOM
     memory_limiter:
       check_interval: 1s
       limit_mib: 400
 
+    # Transform logs - parse JSON and extract fields
+    transform/logs:
+      log_statements:
+        - context: log
+          statements:
+            # Parse JSON body if present
+            - merge_maps(cache, ParseJSON(body), "insert") where IsMatch(body, "^\\{")
+            # Extract trace_id and span_id from parsed JSON
+            - set(trace_id.string, cache["trace_id"]) where cache["trace_id"] != nil
+            - set(span_id.string, cache["span_id"]) where cache["span_id"] != nil
+            # Set severity from level field
+            - set(severity_text, cache["level"]) where cache["level"] != nil
+            # Set attributes from JSON fields
+            - set(attributes["service"], cache["service"]) where cache["service"] != nil
+            - set(attributes["msg"], cache["msg"]) where cache["msg"] != nil
+            - set(attributes["error"], cache["error"]) where cache["error"] != nil
+
+    # Filter to focus on grud namespace (optional - remove if you want all logs)
+    filter/grud:
+      logs:
+        include:
+          match_type: regexp
+          resource_attributes:
+            - key: k8s.namespace.name
+              value: "grud|infra"
+
+
   exporters:
-    # Export metrics to Prometheus
     prometheus:
       endpoint: "0.0.0.0:8889"
       namespace: grud
       const_labels:
         cluster: grud-cluster
-      # Convert resource attributes (service.name, service.version) to metric labels
       resource_to_telemetry_conversion:
         enabled: true
 
-    # Export traces to Tempo
     otlp/tempo:
       endpoint: tempo.infra.svc.cluster.local:4317
       tls:
         insecure: true
 
-    # Debug logging (optional, disable in production)
+    otlphttp/loki:
+      endpoint: http://loki-gateway.infra.svc.cluster.local/otlp
+
     debug:
       verbosity: basic
 
@@ -120,6 +140,10 @@ config:
         receivers: [otlp]
         processors: [memory_limiter, batch, resource]
         exporters: [otlp/tempo]
+      logs:
+        receivers: [filelog]
+        processors: [memory_limiter, transform/logs, batch]
+        exporters: [otlphttp/loki]
 
 # ServiceMonitor for Prometheus to scrape OTel Collector
 serviceMonitor:
@@ -128,4 +152,4 @@ serviceMonitor:
     release: prometheus
   metricsEndpoints:
     - port: prom-exporter
-      interval: 5s
+      interval: 15s

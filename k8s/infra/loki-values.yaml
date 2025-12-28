@@ -27,6 +27,7 @@ loki:
     retention_period: 168h  # 7 days
     ingestion_rate_mb: 10
     max_line_size: 256kb
+    allow_structured_metadata: true  # Required for OTLP
 
 singleBinary:
   replicas: 1

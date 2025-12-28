@@ -66,7 +66,7 @@ data:
                 "uid": "loki"
               },
               "editorMode": "code",
-              "expr": "{namespace=\"grud\", service=~\"$service\"} | json | level=~\"$level\" | line_format \"[{{.level}}] {{.service}}: {{.msg}} | trace_id:{{.trace_id}}\"",
+              "expr": "{k8s_namespace_name=\"grud\"}",
               "queryType": "range",
               "refId": "A"
             }
@@ -98,9 +98,9 @@ data:
             "name": "service",
             "options": [],
             "query": {
-              "label": "service",
+              "label": "k8s_container_name",
               "refId": "LokiVariableQueryEditor-VariableQuery",
-              "stream": "{namespace=\"grud\"}",
+              "stream": "{k8s_namespace_name=\"grud\"}",
               "type": 1
             },
             "refresh": 2,
