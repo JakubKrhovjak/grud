@@ -50,9 +50,30 @@ alloy:
         }
       }
 
-      // Export metrics via Prometheus endpoint (Prometheus scrapes this)
+      // Convert OTLP metrics to Prometheus format and forward to remote_write
+      // resource_to_telemetry_conversion adds service.name as service_name label
       otelcol.exporter.prometheus "default" {
-        forward_to = []
+        include_scope_info = true
+        include_target_info = true
+        resource_to_telemetry_conversion = true
+        forward_to = [prometheus.relabel.add_labels.receiver]
+      }
+
+      // Add cluster label and ensure service_name exists
+      prometheus.relabel "add_labels" {
+        forward_to = [prometheus.remote_write.prometheus.receiver]
+
+        rule {
+          target_label = "cluster"
+          replacement  = "grud-cluster"
+        }
+      }
+
+      // Push metrics to Prometheus
+      prometheus.remote_write "prometheus" {
+        endpoint {
+          url = "http://prometheus-kube-prometheus-prometheus.infra.svc.cluster.local:9090/api/v1/write"
+        }
       }
 
       // Export traces to Tempo via OTLP
@@ -84,7 +105,7 @@ controller:
       cpu: 100m
       memory: 128Mi
 
-# ServiceMonitor for Prometheus to scrape Alloy
+# ServiceMonitor for Prometheus to scrape Alloy internal metrics
 serviceMonitor:
   enabled: true
   additionalLabels:
