@@ -1,4 +1,4 @@
-.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/enable-apis gke/create-registry gke/create-cluster gke/connect gke/deploy gke/status gke/delete-cluster helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-prometheus infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup help
+.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/enable-apis gke/create-registry gke/create-cluster gke/connect gke/deploy gke/status gke/delete-cluster tf/init tf/plan tf/apply tf/destroy tf/output tf/fmt tf/validate helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-prometheus infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup help
 
 # =============================================================================
 # Build Configuration
@@ -197,6 +197,38 @@ gke/cleanup: ## Delete GKE cluster
 	@echo "✅ GKE cluster deleted"
 
 # =============================================================================
+# Terraform
+# =============================================================================
+TF_DIR := terraform
+
+tf/init: ## Initialize Terraform
+	@echo "🔧 Initializing Terraform..."
+	@cd $(TF_DIR) && terraform init
+	@echo "✅ Terraform initialized"
+
+tf/plan: ## Plan Terraform changes
+	@echo "📋 Planning Terraform changes..."
+	@cd $(TF_DIR) && terraform plan
+
+tf/apply: ## Apply Terraform configuration
+	@echo "🚀 Applying Terraform configuration..."
+	@cd $(TF_DIR) && terraform apply
+	@echo "✅ Terraform applied"
+
+tf/destroy: ## Destroy Terraform resources
+	@echo "🗑️  Destroying Terraform resources..."
+	@cd $(TF_DIR) && terraform destroy
+
+tf/output: ## Show Terraform outputs
+	@cd $(TF_DIR) && terraform output
+
+tf/fmt: ## Format Terraform files
+	@cd $(TF_DIR) && terraform fmt -recursive
+
+tf/validate: ## Validate Terraform configuration
+	@cd $(TF_DIR) && terraform validate
+
+# =============================================================================
 # Helm Utilities
 # =============================================================================
 helm/template-kind: ## Show rendered templates for Kind
@@ -313,6 +345,13 @@ help: ## Show this help
 	@echo "  make gke/deploy         - Deploy to GKE with Helm"
 	@echo "  make gke/status         - Show GKE status"
 	@echo "  make gke/cleanup        - Delete GKE cluster"
+	@echo ""
+	@echo "Terraform:"
+	@echo "  make tf/init            - Initialize Terraform"
+	@echo "  make tf/plan            - Plan Terraform changes"
+	@echo "  make tf/apply           - Apply Terraform configuration"
+	@echo "  make tf/destroy         - Destroy Terraform resources"
+	@echo "  make tf/output          - Show Terraform outputs"
 	@echo ""
 	@echo "Observability:"
 	@echo "  make infra/deploy       - Deploy full observability stack"

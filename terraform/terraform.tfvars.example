@@ -1,0 +1,15 @@
+project_id   = "rugged-abacus-483006-r5"
+region       = "europe-west1"
+cluster_name = "grud-cluster"
+
+# Node configuration
+node_count   = 1
+machine_type = "e2-small"
+disk_size_gb = 20
+
+# Autoscaling
+min_node_count = 1
+max_node_count = 3
+
+# Set to true for GKE Autopilot (managed node pools)
+enable_autopilot = false
