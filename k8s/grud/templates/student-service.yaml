@@ -1,6 +1,16 @@
 {{- if .Values.studentService.enabled }}
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: student-service
+  namespace: {{ .Values.global.namespace }}
+  {{- if .Values.studentService.serviceAccount.gcpServiceAccount }}
+  annotations:
+    iam.gke.io/gcp-service-account: {{ .Values.studentService.serviceAccount.gcpServiceAccount }}
+  {{- end }}
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: student-service-config
@@ -87,6 +97,7 @@ spec:
                     values:
                       - {{ index .Values.studentService.nodeSelector "node-type" }}
       {{- end }}
+      serviceAccountName: student-service
       containers:
         - name: student-service
           image: {{ .Values.studentService.image.repository }}

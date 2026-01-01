@@ -40,6 +40,8 @@ studentService:
     secretName: student-db-app
   auth:
     jwtSecret: "super-secret-jwt-key-change-in-production"
+  serviceAccount:
+    gcpServiceAccount: ""  # Set in values-gke.yaml
 
 # Project Service
 projectService:
@@ -73,6 +75,8 @@ projectService:
     port: "5432"
     name: projects
     secretName: project-db-app
+  serviceAccount:
+    gcpServiceAccount: ""  # Set in values-gke.yaml
 
 # Admin Panel
 adminPanel:

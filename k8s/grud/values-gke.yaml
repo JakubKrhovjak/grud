@@ -29,6 +29,8 @@ studentService:
     host: student-db.grud.svc.cluster.local
     port: "5432"
     name: university
+  serviceAccount:
+    gcpServiceAccount: student-service@rugged-abacus-483006-r5.iam.gserviceaccount.com
 
 projectService:
   enabled: true
@@ -54,6 +56,8 @@ projectService:
     host: project-db.grud.svc.cluster.local
     port: "5432"
     name: projects
+  serviceAccount:
+    gcpServiceAccount: project-service@rugged-abacus-483006-r5.iam.gserviceaccount.com
 
 # Disabled for GKE
 adminPanel:
