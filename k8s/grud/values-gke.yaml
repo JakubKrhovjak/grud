@@ -17,9 +17,13 @@ studentService:
     requests:
       cpu: 50m
       memory: 64Mi
-  # No node selector/tolerations for GKE (runs on any node)
-  nodeSelector: {}
-  tolerations: []
+  nodeSelector:
+    node-type: app
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "app"
+      effect: "NoSchedule"
   database:
     # TODO: Update with Cloud SQL connection
     host: student-db.grud.svc.cluster.local
@@ -38,8 +42,13 @@ projectService:
     requests:
       cpu: 50m
       memory: 64Mi
-  nodeSelector: {}
-  tolerations: []
+  nodeSelector:
+    node-type: app
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "app"
+      effect: "NoSchedule"
   database:
     # TODO: Update with Cloud SQL connection
     host: project-db.grud.svc.cluster.local
