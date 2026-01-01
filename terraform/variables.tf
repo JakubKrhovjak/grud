@@ -58,3 +58,16 @@ variable "app_max_node_count" {
   type        = number
   default     = 4
 }
+
+# Cloud SQL
+variable "db_password_student" {
+  description = "Password for student_user"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_password_project" {
+  description = "Password for project_user"
+  type        = string
+  sensitive   = true
+}

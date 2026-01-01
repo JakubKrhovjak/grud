@@ -13,3 +13,7 @@ app_node_count     = 2
 app_machine_type   = "e2-medium"
 app_min_node_count = 2
 app_max_node_count = 4
+
+# Cloud SQL passwords
+db_password_student = "student_password_change_me"
+db_password_project = "project_password_change_me"

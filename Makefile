@@ -1,4 +1,4 @@
-.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/enable-apis gke/create-registry gke/create-cluster gke/connect gke/deploy gke/status gke/delete-cluster helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-prometheus infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup help
+.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/connect gke/deploy gke/status gke/update-db-ip gke/full-deploy tf/init tf/plan tf/apply tf/destroy tf/output tf/fmt tf/validate helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-prometheus infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup help
 
 # =============================================================================
 # Build Configuration
@@ -112,7 +112,7 @@ kind/cleanup: ## Delete Kind cluster
 	@./scripts/cleanup.sh
 
 # =============================================================================
-# GKE Cluster
+# GKE Cluster (infrastructure via Terraform)
 # =============================================================================
 GCP_PROJECT := rugged-abacus-483006-r5
 GCP_REGION := europe-west1
@@ -126,42 +126,12 @@ gke/auth: ## Authenticate with GCP
 	@gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev
 	@echo "✅ GCP authentication complete"
 
-gke/enable-apis: ## Enable required GCP APIs
-	@echo "🔧 Enabling required APIs..."
-	@gcloud services enable container.googleapis.com --project=$(GCP_PROJECT)
-	@gcloud services enable artifactregistry.googleapis.com --project=$(GCP_PROJECT)
-	@echo "✅ APIs enabled"
-
-gke/create-registry: ## Create Artifact Registry repository
-	@echo "📦 Creating Artifact Registry..."
-	@gcloud artifacts repositories create grud \
-		--repository-format=docker \
-		--location=$(GCP_REGION) \
-		--description="GRUD container images" || echo "Repository already exists"
-	@echo "✅ Artifact Registry ready"
-
-gke/create-cluster: ## Create GKE Standard cluster
-	@echo "🚀 Creating GKE Standard cluster..."
-	@gcloud container clusters create $(GKE_CLUSTER) \
-		--region=$(GCP_REGION) \
-		--project=$(GCP_PROJECT) \
-		--num-nodes=1 \
-		--machine-type=e2-small \
-		--disk-size=20GB
-	@echo "✅ GKE cluster created"
-
-gke/connect: ## Connect to existing GKE cluster
+gke/connect: ## Connect to GKE cluster
 	@echo "🔗 Connecting to GKE cluster..."
 	@gcloud container clusters get-credentials $(GKE_CLUSTER) \
 		--region=$(GCP_REGION) \
 		--project=$(GCP_PROJECT)
 	@echo "✅ Connected to $(GKE_CLUSTER)"
-
-gke/setup: gke/auth gke/create-registry ## Full GKE setup (auth + registry)
-	@echo "✅ GKE setup complete"
-
-gke/full-setup: gke/auth gke/enable-apis gke/create-registry gke/create-cluster gke/connect ## Full GKE setup including cluster creation
-	@echo "✅ GKE full setup complete"
 
 gke/deploy: gke/connect ## Deploy to GKE with Helm
 	@echo "🚀 Deploying to GKE with Helm..."
@@ -173,7 +143,7 @@ gke/deploy: gke/connect ## Deploy to GKE with Helm
 		--wait
 	@echo "✅ Deployed to GKE"
 
-gke/status: gke/connect ## Show GKE cluster status
+gke/status: ## Show GKE cluster status
 	@echo "📋 GKE Cluster Status"
 	@echo ""
 	@echo "Nodes:"
@@ -188,13 +158,14 @@ gke/status: gke/connect ## Show GKE cluster status
 	@echo "Services:"
 	@kubectl get services -n grud
 
-gke/cleanup: ## Delete GKE cluster
-	@echo "🗑️  Deleting GKE cluster..."
-	@gcloud container clusters delete $(GKE_CLUSTER) \
-		--region=$(GCP_REGION) \
-		--project=$(GCP_PROJECT) \
-		--quiet
-	@echo "✅ GKE cluster deleted"
+gke/update-db-ip: ## Update values-gke.yaml with Cloud SQL private IP
+	@echo "🔄 Updating Cloud SQL IP in values-gke.yaml..."
+	@CLOUDSQL_IP=$$(cd terraform && terraform output -raw cloudsql_private_ip) && \
+	sed -i '' "s/CLOUD_SQL_PRIVATE_IP/$$CLOUDSQL_IP/g" k8s/grud/values-gke.yaml && \
+	echo "✅ Updated database host to: $$CLOUDSQL_IP"
+
+gke/full-deploy: tf/apply gke/connect gke/update-db-ip gke/deploy ## Full GKE deployment (terraform + helm)
+	@echo "✅ Full GKE deployment complete"
 
 # =============================================================================
 # Helm Utilities

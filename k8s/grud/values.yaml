@@ -5,6 +5,10 @@ global:
   environment: kind
   namespace: grud
 
+# Cloud SQL (disabled for Kind - using local PostgreSQL)
+cloudSql:
+  enabled: false
+
 # Student Service
 studentService:
   enabled: true

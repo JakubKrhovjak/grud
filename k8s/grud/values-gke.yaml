@@ -5,6 +5,19 @@ global:
   environment: gcp-gke
   namespace: grud
 
+# Cloud SQL configuration
+cloudSql:
+  enabled: true
+  host: "CLOUD_SQL_PRIVATE_IP"  # Updated by: make gke/update-db-ip
+  # Student database
+  studentDatabase: university
+  studentUser: student_user
+  studentPassword: student_password_change_me
+  # Project database
+  projectDatabase: projects
+  projectUser: project_user
+  projectPassword: project_password_change_me
+
 studentService:
   enabled: true
   replicaCount: 2
@@ -25,10 +38,10 @@ studentService:
       value: "app"
       effect: "NoSchedule"
   database:
-    # TODO: Update with Cloud SQL connection
-    host: student-db.grud.svc.cluster.local
+    host: "CLOUD_SQL_PRIVATE_IP"  # Updated by: make gke/update-db-ip
     port: "5432"
     name: university
+    secretName: student-db-credentials
   serviceAccount:
     gcpServiceAccount: student-service@rugged-abacus-483006-r5.iam.gserviceaccount.com
 
@@ -52,10 +65,10 @@ projectService:
       value: "app"
       effect: "NoSchedule"
   database:
-    # TODO: Update with Cloud SQL connection
-    host: project-db.grud.svc.cluster.local
+    host: "CLOUD_SQL_PRIVATE_IP"  # Updated by: make gke/update-db-ip
     port: "5432"
     name: projects
+    secretName: project-db-credentials
   serviceAccount:
     gcpServiceAccount: project-service@rugged-abacus-483006-r5.iam.gserviceaccount.com
 
