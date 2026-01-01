@@ -27,7 +27,7 @@ resource "google_container_cluster" "primary" {
   }
 
   # Dataplane V2 (eBPF/Cilium) - better networking & observability
-  datapath_provider = "ADVANCED_DATAPATH_PROVIDER"
+  datapath_provider = "ADVANCED_DATAPATH"
 
   depends_on = [google_project_service.container]
 }

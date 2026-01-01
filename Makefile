@@ -164,8 +164,48 @@ gke/update-db-ip: ## Update values-gke.yaml with Cloud SQL private IP
 	sed -i '' "s/CLOUD_SQL_PRIVATE_IP/$$CLOUDSQL_IP/g" k8s/grud/values-gke.yaml && \
 	echo "✅ Updated database host to: $$CLOUDSQL_IP"
 
-gke/full-deploy: tf/apply gke/connect gke/update-db-ip gke/deploy ## Full GKE deployment (terraform + helm)
-	@echo "✅ Full GKE deployment complete"
+gke/full-deploy: ## Full GKE deployment (terraform + helm)
+	@$(MAKE) tf/init
+	@$(MAKE) tf/plan
+	@$(MAKE) tf/apply
+	@$(MAKE) gke/connect
+	@$(MAKE) infra/setup
+	@$(MAKE) infra/deploy
+	@$(MAKE) gke/update-db-ip
+	@$(MAKE) gke/deploy
+	@echo "✅ Full GKE depl oyment complete"
+
+# =============================================================================
+# Terraform
+# =============================================================================
+TF_DIR := terraform
+
+tf/init: ## Initialize Terraform
+	@echo "🔧 Initializing Terraform..."
+	@cd $(TF_DIR) && terraform init
+	@echo "✅ Terraform initialized"
+
+tf/plan: ## Plan Terraform changes
+	@echo "📋 Planning Terraform changes..."
+	@cd $(TF_DIR) && terraform plan
+
+tf/apply: ## Apply Terraform configuration
+	@echo "🚀 Applying Terraform configuration..."
+	@cd $(TF_DIR) && terraform apply -auto-approve
+	@echo "✅ Terraform applied"
+
+tf/destroy: ## Destroy Terraform resources
+	@echo "🗑️  Destroying Terraform resources..."
+	@cd $(TF_DIR) && terraform destroy
+
+tf/output: ## Show Terraform outputs
+	@cd $(TF_DIR) && terraform output
+
+tf/fmt: ## Format Terraform files
+	@cd $(TF_DIR) && terraform fmt -recursive
+
+tf/validate: ## Validate Terraform configuration
+	@cd $(TF_DIR) && terraform validate
 
 # =============================================================================
 # Helm Utilities
