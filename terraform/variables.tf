@@ -65,6 +65,33 @@ variable "app_max_node_count" {
   default     = 4
 }
 
+# Private cluster
+variable "enable_private_endpoint" {
+  description = "Enable private endpoint (API server not accessible from internet)"
+  type        = bool
+  default     = true
+}
+
+variable "master_ipv4_cidr_block" {
+  description = "CIDR block for GKE master (control plane) - must be /28 and not overlap with other ranges"
+  type        = string
+  default     = "172.16.0.0/28"
+}
+
+variable "master_authorized_networks" {
+  description = "List of CIDR blocks authorized to access the Kubernetes master"
+  type = list(object({
+    cidr_block   = string
+    display_name = string
+  }))
+  default = [
+    {
+      cidr_block   = "10.0.0.0/24"
+      display_name = "VPC subnet"
+    }
+  ]
+}
+
 # Cloud SQL
 variable "db_password_student" {
   description = "Password for student_user"

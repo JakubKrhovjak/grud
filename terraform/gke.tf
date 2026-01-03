@@ -19,6 +19,24 @@ resource "google_container_cluster" "primary" {
     services_secondary_range_name = "services"
   }
 
+  # Private cluster configuration
+  private_cluster_config {
+    enable_private_nodes    = true
+    enable_private_endpoint = var.enable_private_endpoint
+    master_ipv4_cidr_block  = var.master_ipv4_cidr_block
+  }
+
+  # Master authorized networks - restrict API access
+  master_authorized_networks_config {
+    dynamic "cidr_blocks" {
+      for_each = var.master_authorized_networks
+      content {
+        cidr_block   = cidr_blocks.value.cidr_block
+        display_name = cidr_blocks.value.display_name
+      }
+    }
+  }
+
   # Workload Identity
   workload_identity_config {
     workload_pool = "${var.project_id}.svc.id.goog"
