@@ -69,7 +69,7 @@ variable "app_max_node_count" {
 variable "enable_private_endpoint" {
   description = "Enable private endpoint (API server not accessible from internet)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "master_ipv4_cidr_block" {
@@ -88,6 +88,10 @@ variable "master_authorized_networks" {
     {
       cidr_block   = "10.0.0.0/24"
       display_name = "VPC subnet"
+    },
+    {
+      cidr_block   = "141.170.140.27/32"
+      display_name = "Jakub home"
     }
   ]
 }
