@@ -142,14 +142,11 @@ gke/build: ## Build and push images to Artifact Registry
 
 gke/deploy: gke/connect gke/build ## Deploy to GKE with Helm
 	@echo "🚀 Deploying to GKE with Helm..."
-	$(eval CLOUDSQL_IP := $(shell cd terraform && terraform output -raw cloudsql_private_ip))
 	@helm upgrade --install grud k8s/grud \
 		-n grud --create-namespace \
 		-f k8s/grud/values-gke.yaml \
 		--set studentService.image.repository=$(GKE_REGISTRY)/student-service \
 		--set projectService.image.repository=$(GKE_REGISTRY)/project-service \
-		--set studentService.database.host=$(CLOUDSQL_IP) \
-		--set projectService.database.host=$(CLOUDSQL_IP) \
 		--wait
 	@echo "✅ Deployed to GKE"
 
