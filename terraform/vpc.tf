@@ -35,3 +35,21 @@ resource "google_compute_router_nat" "nat" {
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 }
+
+# Firewall rule to allow GKE master to access kubelet on nodes
+# Required for private clusters to allow master -> node communication (logs, exec, etc.)
+resource "google_compute_firewall" "gke_master_to_kubelet" {
+  name    = "${var.cluster_name}-master-kubelet"
+  network = google_compute_network.vpc.name
+
+  direction = "INGRESS"
+  priority  = 900  # Higher priority than default GKE rules
+
+  allow {
+    protocol = "tcp"
+    ports    = ["10250", "443", "8443"]
+  }
+
+  # Only from master CIDR - applies to all instances in the network
+  source_ranges = [var.master_ipv4_cidr_block]
+}

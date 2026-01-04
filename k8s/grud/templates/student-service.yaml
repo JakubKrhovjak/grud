@@ -55,6 +55,23 @@ data:
     nats:
       url: {{ .Values.studentService.config.natsUrl }}
       subject: {{ .Values.studentService.config.natsSubject }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: student-service-backend-config
+  namespace: {{ .Values.global.namespace }}
+spec:
+  healthCheck:
+    type: HTTP
+    port: 8080
+    requestPath: /health
+    checkIntervalSec: 15
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 2
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -64,6 +81,7 @@ metadata:
   {{- if .Values.ingress.enabled }}
   annotations:
     cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "student-service-backend-config"}'
   {{- end }}
 spec:
   {{- if .Values.ingress.enabled }}
@@ -168,6 +186,7 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
             - "{{ .Values.cloudSql.connectionName }}"
           securityContext:

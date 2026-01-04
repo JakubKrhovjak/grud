@@ -140,7 +140,7 @@ gke/build: ## Build and push images to Artifact Registry
 	@KO_DOCKER_REPO=$(GKE_REGISTRY)/project-service ko build --bare -t latest ./services/project-service/cmd/project-service
 	@echo "✅ Images pushed to $(GKE_REGISTRY)"
 
-gke/deploy: gke/connect gke/build ## Deploy to GKE with Helm
+gke/deploy: gke/connect gke/build  ## Deploy to GKE with Helm
 	@echo "🚀 Deploying to GKE with Helm..."
 	@helm upgrade --install grud k8s/grud \
 		-n grud --create-namespace \
@@ -148,6 +148,7 @@ gke/deploy: gke/connect gke/build ## Deploy to GKE with Helm
 		--set studentService.image.repository=$(GKE_REGISTRY)/student-service \
 		--set projectService.image.repository=$(GKE_REGISTRY)/project-service \
 		--wait
+	@kubectl rollout restart deployment -n grud
 	@echo "✅ Deployed to GKE"
 
 gke/status: ## Show GKE cluster status
@@ -181,6 +182,11 @@ CPU_REQ:.spec.containers[*].resources.requests.cpu,\
 CPU_LIM:.spec.containers[*].resources.limits.cpu,\
 MEM_REQ:.spec.containers[*].resources.requests.memory,\
 MEM_LIM:.spec.containers[*].resources.limits.memory"
+
+gke/clean: ## Clean uninstall grud helm release and all pods
+	@echo "🧹 Cleaning grud namespace..."
+	@helm uninstall grud -n grud --wait 2>/dev/null || true
+	@echo "✅ Cleanup complete"
 
 gke/full-deploy: ## Full GKE deployment (terraform + helm)
 	@$(MAKE) tf/init
@@ -233,7 +239,7 @@ gke/ingress: ## Show Ingress status and external IP
 	@echo "  API:     http://$$(cd $(TF_DIR) && terraform output -raw ingress_ip 2>/dev/null)/api"
 	@echo "  Grafana: http://$$(cd $(TF_DIR) && terraform output -raw grafana_ip 2>/dev/null)"
 
-gke/resources: ## List all GCP resources in project
+gcp/resources: ## List all GCP resources in project
 	@echo "=== GKE Clusters ==="
 	@gcloud container clusters list --project=$(GCP_PROJECT) 2>/dev/null || echo "None"
 	@echo ""
@@ -394,6 +400,7 @@ help: ## Show this help
 	@echo "  make gke/deploy         - Deploy to GKE with Helm"
 	@echo "  make gke/status         - Show GKE status"
 	@echo "  make gke/resources      - Show resource utilization"
+	@echo "  make gke/clean          - Clean uninstall helm release"
 	@echo "  make gke/cleanup        - Delete GKE cluster"
 	@echo ""
 	@echo "Observability:"

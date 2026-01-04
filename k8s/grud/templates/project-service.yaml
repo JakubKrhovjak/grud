@@ -142,6 +142,7 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
             - "{{ .Values.cloudSql.connectionName }}"
           securityContext:

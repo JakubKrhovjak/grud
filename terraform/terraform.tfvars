@@ -9,10 +9,10 @@ disk_size_gb = 20
 infra_machine_type = "e2-medium"
 
 # App node pool (2 nodes for services: student-service, project-service)
-app_node_count     = 2
+app_node_count     = 1
 app_machine_type   = "e2-medium"
-app_min_node_count = 2
-app_max_node_count = 4
+app_min_node_count = 1
+app_max_node_count = 2
 
 # Cloud SQL passwords
 db_password_student = "student_password_change_me"

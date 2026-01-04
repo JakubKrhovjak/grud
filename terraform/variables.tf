@@ -44,7 +44,7 @@ variable "infra_machine_type" {
 variable "app_node_count" {
   description = "Number of app nodes"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "app_machine_type" {
@@ -56,7 +56,7 @@ variable "app_machine_type" {
 variable "app_min_node_count" {
   description = "Minimum app nodes for autoscaling"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "app_max_node_count" {

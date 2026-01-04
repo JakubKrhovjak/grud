@@ -53,12 +53,12 @@ resource "google_container_cluster" "primary" {
   depends_on = [google_project_service.container]
 }
 
-# Infra node pool - for NATS only
+# Infra node pool - for NATS and system components (no taint to allow kube-dns)
 resource "google_container_node_pool" "infra" {
   name       = "infra-pool"
   location   = var.zone
   cluster    = google_container_cluster.primary.name
-  node_count = 1
+  node_count = 2  # Increased for monitoring stack + NATS
 
   node_config {
     machine_type = var.infra_machine_type
@@ -69,11 +69,7 @@ resource "google_container_node_pool" "infra" {
       "node-type" = "infra"
     }
 
-    taint {
-      key    = "workload"
-      value  = "infra"
-      effect = "NO_SCHEDULE"
-    }
+    # No taint - allows system components like kube-dns to run here
 
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
