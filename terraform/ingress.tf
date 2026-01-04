@@ -1,23 +1,19 @@
 # Static IP for Ingress
 # This ensures the external IP doesn't change on redeploy
 
-# Static IP for application Ingress (student-service API)
-# prevent_destroy ensures IP is preserved after terraform destroy
-resource "google_compute_global_address" "ingress_ip" {
-  name        = "grud-ingress-ip"
-  description = "Static IP for GRUD application Ingress"
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-# Static IP for Grafana Ingress
-resource "google_compute_global_address" "grafana_ip" {
-  name        = "grud-grafana-ip"
-  description = "Static IP for Grafana Ingress"
-
-  lifecycle {
-    prevent_destroy = true
-  }
+# =============================================================================
+# Application Ingress IP (grudapp.com)
+# =============================================================================
+# This IP is managed OUTSIDE of terraform destroy/apply cycle.
+# It must exist before running terraform apply.
+#
+# Create once manually:
+#   gcloud compute addresses create grud-ingress-ip --global
+#
+# Or import existing:
+#   terraform import google_compute_global_address.ingress_ip grud-ingress-ip
+#
+# This data source references the existing IP (doesn't create/destroy it)
+data "google_compute_global_address" "ingress_ip" {
+  name = "grud-ingress-ip"
 }

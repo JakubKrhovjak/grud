@@ -48,10 +48,6 @@ output "cloudsql_private_ip" {
 # Ingress
 output "ingress_ip" {
   description = "Static IP for application Ingress"
-  value       = google_compute_global_address.ingress_ip.address
+  value       = data.google_compute_global_address.ingress_ip.address
 }
 
-output "grafana_ip" {
-  description = "Static IP for Grafana Ingress"
-  value       = google_compute_global_address.grafana_ip.address
-}
