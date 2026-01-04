@@ -8,7 +8,9 @@ global:
 # Cloud SQL configuration
 cloudSql:
   enabled: true
-  host: "CLOUD_SQL_PRIVATE_IP"  # Updated by: make gke/update-db-ip
+  # Connection name format: project:region:instance
+  # Get with: cd terraform && terraform output cloudsql_instance_name
+  connectionName: "rugged-abacus-483006-r5:europe-west1:grud-postgres"
   # Student database
   studentDatabase: university
   studentUser: student_user
@@ -48,7 +50,6 @@ studentService:
       value: "app"
       effect: "NoSchedule"
   database:
-    host: "CLOUD_SQL_PRIVATE_IP"  # Updated by: make gke/update-db-ip
     port: "5432"
     name: university
     secretName: student-db-credentials
@@ -75,7 +76,6 @@ projectService:
       value: "app"
       effect: "NoSchedule"
   database:
-    host: "CLOUD_SQL_PRIVATE_IP"  # Updated by: make gke/update-db-ip
     port: "5432"
     name: projects
     secretName: project-db-credentials

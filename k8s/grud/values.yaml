@@ -8,6 +8,7 @@ global:
 # Cloud SQL (disabled for Kind - using local PostgreSQL)
 cloudSql:
   enabled: false
+  connectionName: ""  # Set in values-gke.yaml: project:region:instance
 
 # Ingress (disabled for Kind - using NodePort)
 ingress:

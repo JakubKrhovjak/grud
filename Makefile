@@ -134,13 +134,22 @@ gke/connect: ## Connect to GKE cluster
 		--project=$(GCP_PROJECT)
 	@echo "✅ Connected to $(GKE_CLUSTER)"
 
-gke/deploy: gke/connect ## Deploy to GKE with Helm
+gke/build: ## Build and push images to Artifact Registry
+	@echo "📦 Building and pushing images to Artifact Registry..."
+	@KO_DOCKER_REPO=$(GKE_REGISTRY)/student-service ko build --bare -t latest ./services/student-service/cmd/student-service
+	@KO_DOCKER_REPO=$(GKE_REGISTRY)/project-service ko build --bare -t latest ./services/project-service/cmd/project-service
+	@echo "✅ Images pushed to $(GKE_REGISTRY)"
+
+gke/deploy: gke/connect gke/build ## Deploy to GKE with Helm
 	@echo "🚀 Deploying to GKE with Helm..."
+	$(eval CLOUDSQL_IP := $(shell cd terraform && terraform output -raw cloudsql_private_ip))
 	@helm upgrade --install grud k8s/grud \
 		-n grud --create-namespace \
 		-f k8s/grud/values-gke.yaml \
 		--set studentService.image.repository=$(GKE_REGISTRY)/student-service \
 		--set projectService.image.repository=$(GKE_REGISTRY)/project-service \
+		--set studentService.database.host=$(CLOUDSQL_IP) \
+		--set projectService.database.host=$(CLOUDSQL_IP) \
 		--wait
 	@echo "✅ Deployed to GKE"
 
@@ -159,11 +168,22 @@ gke/status: ## Show GKE cluster status
 	@echo "Services:"
 	@kubectl get services -n grud
 
-gke/update-db-ip: ## Update values-gke.yaml with Cloud SQL private IP
-	@echo "🔄 Updating Cloud SQL IP in values-gke.yaml..."
-	@CLOUDSQL_IP=$$(cd terraform && terraform output -raw cloudsql_private_ip) && \
-	sed -i '' "s/CLOUD_SQL_PRIVATE_IP/$$CLOUDSQL_IP/g" k8s/grud/values-gke.yaml && \
-	echo "✅ Updated database host to: $$CLOUDSQL_IP"
+gke/resources: ## Show resource utilization for grud namespace and nodes
+	@echo "📊 Resource Utilization"
+	@echo ""
+	@echo "=== Node Resources ==="
+	@kubectl top nodes
+	@echo ""
+	@echo "=== Pod Resources (grud namespace) ==="
+	@kubectl top pods -n grud --containers
+	@echo ""
+	@echo "=== Resource Requests/Limits ==="
+	@kubectl get pods -n grud -o custom-columns="\
+NAME:.metadata.name,\
+CPU_REQ:.spec.containers[*].resources.requests.cpu,\
+CPU_LIM:.spec.containers[*].resources.limits.cpu,\
+MEM_REQ:.spec.containers[*].resources.requests.memory,\
+MEM_LIM:.spec.containers[*].resources.limits.memory"
 
 gke/full-deploy: ## Full GKE deployment (terraform + helm)
 	@$(MAKE) tf/init
@@ -172,9 +192,8 @@ gke/full-deploy: ## Full GKE deployment (terraform + helm)
 	@$(MAKE) gke/connect
 	@$(MAKE) infra/setup
 	@$(MAKE) infra/deploy-gke
-	@$(MAKE) gke/update-db-ip
 	@$(MAKE) gke/deploy
-	@echo "✅ Full GKE depl oyment complete"
+	@echo "✅ Full GKE deployment complete"
 
 # =============================================================================
 # Terraform
@@ -337,6 +356,10 @@ infra/status: ## Show infra pods status
 	@echo "📊 Observability stack status:"
 	@kubectl get pods -n infra
 
+infra/resources: ## Show infra node resource utilization
+	@echo "📊 Infra node resource utilization:"
+	@kubectl describe node -l node-type=infra | grep -A10 "Allocated resources:"
+
 infra/cleanup: ## Remove observability stack
 	@echo "🧹 Cleaning up observability stack..."
 	@helm uninstall loki -n infra 2>/dev/null || true
@@ -373,6 +396,7 @@ help: ## Show this help
 	@echo "  make gke/full-setup     - Full setup including cluster creation"
 	@echo "  make gke/deploy         - Deploy to GKE with Helm"
 	@echo "  make gke/status         - Show GKE status"
+	@echo "  make gke/resources      - Show resource utilization"
 	@echo "  make gke/cleanup        - Delete GKE cluster"
 	@echo ""
 	@echo "Observability:"
