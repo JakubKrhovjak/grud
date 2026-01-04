@@ -21,18 +21,29 @@ PASSWORD="TestPassword123!"
 DELAY=0.01
 COOKIE_FILE="/tmp/student_cookies_$(date +%s).txt"
 
-# Auto-detect GKE ingress IP
-get_ingress_ip() {
-  kubectl get ingress -n grud grud-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null
+# Auto-detect GKE ingress host (domain) or IP
+get_ingress_url() {
+  # Try to get host (domain) first
+  HOST=$(kubectl get ingress -n grud grud-ingress -o jsonpath='{.spec.rules[0].host}' 2>/dev/null)
+  if [ -n "$HOST" ]; then
+    echo "https://${HOST}"
+    return
+  fi
+  # Fallback to IP
+  IP=$(kubectl get ingress -n grud grud-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+  if [ -n "$IP" ]; then
+    echo "http://${IP}"
+    return
+  fi
 }
 
 # Try to get BASE_URL from ingress if not provided
-INGRESS_IP=$(get_ingress_ip)
-if [ -n "$INGRESS_IP" ]; then
-  BASE_URL="http://${INGRESS_IP}"
+DETECTED_URL=$(get_ingress_url)
+if [ -n "$DETECTED_URL" ]; then
+  BASE_URL="$DETECTED_URL"
 else
   BASE_URL="http://localhost:8080"
-  echo "⚠ Could not detect ingress IP, using localhost"
+  echo "⚠ Could not detect ingress, using localhost"
 fi
 
 # Parse command line arguments

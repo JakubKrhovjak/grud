@@ -303,8 +303,9 @@ infra/deploy-prometheus: ## Deploy Prometheus stack (Kind)
 		-n infra \
 		-f k8s/infra/prometheus-values.yaml \
 		--wait
-	@echo "📊 Deploying Grafana dashboards..."
+	@echo "📊 Deploying Grafana dashboards and datasources..."
 	@kubectl apply -f k8s/infra/grafana-dashboard-configmap.yaml
+	@kubectl apply -f k8s/infra/grafana-datasources.yaml
 	@echo "✅ Prometheus stack deployed"
 
 infra/deploy-prometheus-gke: ## Deploy Prometheus stack (GKE with Ingress)
@@ -315,8 +316,9 @@ infra/deploy-prometheus-gke: ## Deploy Prometheus stack (GKE with Ingress)
 		-f k8s/infra/prometheus-values.yaml \
 		-f k8s/infra/prometheus-values-gke.yaml \
 		--wait
-	@echo "📊 Deploying Grafana dashboards..."
+	@echo "📊 Deploying Grafana dashboards and datasources..."
 	@kubectl apply -f k8s/infra/grafana-dashboard-configmap.yaml
+	@kubectl apply -f k8s/infra/grafana-datasources.yaml
 	@echo "✅ Prometheus stack deployed with Ingress"
 
 infra/deploy-alloy: ## Deploy Grafana Alloy
