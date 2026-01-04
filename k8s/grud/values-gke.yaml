@@ -8,9 +8,9 @@ global:
 # Cloud SQL configuration
 cloudSql:
   enabled: true
-  # Connection name format: project:region:instance
-  # Get with: cd terraform && terraform output cloudsql_instance_name
-  connectionName: "rugged-abacus-483006-r5:europe-west1:grud-postgres"
+  # Private IP is passed from Terraform via Makefile
+  # Get with: cd terraform && terraform output cloudsql_private_ip
+  privateIp: ""  # Set by: --set cloudSql.privateIp=$(terraform output -raw cloudsql_private_ip)
   # Student database
   studentDatabase: university
   studentUser: student_user
