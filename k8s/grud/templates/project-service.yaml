@@ -72,10 +72,6 @@ spec:
     metadata:
       labels:
         app: project-service
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "50052"
-        prometheus.io/path: "/metrics"
     spec:
       {{- if .Values.projectService.tolerations }}
       tolerations:

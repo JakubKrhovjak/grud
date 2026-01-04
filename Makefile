@@ -1,4 +1,4 @@
-.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/connect gke/deploy gke/status gke/update-db-ip gke/full-deploy gke/ingress gke/resources tf/init tf/plan tf/apply tf/destroy tf/output tf/fmt tf/validate helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-gke infra/deploy-prometheus infra/deploy-prometheus-gke infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup help
+.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/connect gke/deploy gke/status gke/full-deploy gke/ingress gke/resources gke/clean gke/prometheus gke/grafana tf/init tf/plan tf/apply tf/destroy tf/output tf/fmt tf/validate helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-gke infra/deploy-prometheus infra/deploy-prometheus-gke infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup help
 
 # =============================================================================
 # Build Configuration
@@ -187,6 +187,14 @@ gke/clean: ## Clean uninstall grud helm release and all pods
 	@echo "🧹 Cleaning grud namespace..."
 	@helm uninstall grud -n grud --wait 2>/dev/null || true
 	@echo "✅ Cleanup complete"
+
+gke/prometheus: ## Port-forward Prometheus (localhost:9090)
+	@echo "📊 Port-forwarding Prometheus to localhost:9090..."
+	@kubectl port-forward -n infra svc/prometheus-kube-prometheus-prometheus 9090:9090
+
+gke/grafana: ## Port-forward Grafana (localhost:3000)
+	@echo "📈 Port-forwarding Grafana to localhost:3000..."
+	@kubectl port-forward -n infra svc/prometheus-grafana 3000:80
 
 gke/full-deploy: ## Full GKE deployment (terraform + helm)
 	@$(MAKE) tf/init
@@ -401,6 +409,8 @@ help: ## Show this help
 	@echo "  make gke/status         - Show GKE status"
 	@echo "  make gke/resources      - Show resource utilization"
 	@echo "  make gke/clean          - Clean uninstall helm release"
+	@echo "  make gke/prometheus     - Port-forward Prometheus (localhost:9090)"
+	@echo "  make gke/grafana        - Port-forward Grafana (localhost:3000)"
 	@echo "  make gke/cleanup        - Delete GKE cluster"
 	@echo ""
 	@echo "Observability:"

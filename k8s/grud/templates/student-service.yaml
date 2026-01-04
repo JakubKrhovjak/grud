@@ -113,10 +113,6 @@ spec:
     metadata:
       labels:
         app: student-service
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
-        prometheus.io/path: "/metrics"
     spec:
       {{- if .Values.studentService.tolerations }}
       tolerations:

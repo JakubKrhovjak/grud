@@ -23,7 +23,7 @@ cloudSql:
 # Ingress for external access
 ingress:
   enabled: true
-  # host: api.yourdomain.com  # Uncomment and set your domain
+  host: grudapp.com
   annotations: {}
   # For HTTPS, configure managed certificate:
   # annotations:
