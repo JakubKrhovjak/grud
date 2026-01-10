@@ -28,6 +28,6 @@ resource "helm_release" "external_secrets" {
 
   depends_on = [
     google_container_cluster.primary,
-    google_container_node_pool.primary_nodes
+    google_container_node_pool.infra
   ]
 }

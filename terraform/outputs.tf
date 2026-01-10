@@ -24,14 +24,9 @@ output "configure_docker_command" {
   value       = "gcloud auth configure-docker ${var.region}-docker.pkg.dev"
 }
 
-output "student_service_sa" {
-  description = "Student service GCP service account email"
-  value       = google_service_account.student_service.email
-}
-
-output "project_service_sa" {
-  description = "Project service GCP service account email"
-  value       = google_service_account.project_service.email
+output "secrets_operator_sa" {
+  description = "Secrets operator GCP service account email"
+  value       = google_service_account.secrets_operator.email
 }
 
 # Cloud SQL
