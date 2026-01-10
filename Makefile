@@ -393,7 +393,6 @@ infra/cleanup: ## Remove observability stack
 	@helm uninstall alloy -n infra 2>/dev/null || true
 	@kubectl delete -f k8s/infra/nats.yaml 2>/dev/null || true
 	@kubectl delete -f k8s/infra/alerting-rules.yaml 2>/dev/null || true
-	@kubectl delete namespace infra 2>/dev/null || true
 	@echo "✅ Cleanup complete"
 
 # =============================================================================
