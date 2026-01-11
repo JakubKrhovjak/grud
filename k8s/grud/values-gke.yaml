@@ -11,6 +11,8 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: "gce"
     kubernetes.io/ingress.global-static-ip-name: "grud-ingress-ip"
+  observability:
+    enabled: true
 
 # Cloud SQL configuration
 cloudSql:

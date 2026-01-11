@@ -13,6 +13,8 @@ cloudSql:
 # Ingress (disabled for Kind - using NodePort)
 ingress:
   enabled: false
+  observability:
+    enabled: false
 
 # Student Service
 studentService:
