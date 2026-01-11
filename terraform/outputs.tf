@@ -47,8 +47,8 @@ output "ingress_ip" {
 }
 
 output "grafana_ip" {
-  description = "Static IP for Grafana LoadBalancer"
-  value       = google_compute_address.grafana_ip.address
+  description = "Static IP for Grafana GCE Ingress"
+  value       = data.google_compute_global_address.grafana_ip.address
 }
 
 # Secrets

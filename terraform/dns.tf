@@ -41,5 +41,5 @@ resource "google_dns_record_set" "grafana" {
   managed_zone = google_dns_managed_zone.grudapp.name
   type         = "A"
   ttl          = 300
-  rrdatas      = [google_compute_address.grafana_ip.address]
+  rrdatas      = [data.google_compute_global_address.grafana_ip.address]
 }
