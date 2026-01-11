@@ -61,3 +61,19 @@ resource "google_project_service" "iap" {
   service            = "iap.googleapis.com"
   disable_on_destroy = false
 }
+
+# Required for: Connect Gateway (fleet.tf)
+resource "google_project_service" "connectgateway" {
+  service            = "connectgateway.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "gkeconnect" {
+  service            = "gkeconnect.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "gkehub" {
+  service            = "gkehub.googleapis.com"
+  disable_on_destroy = false
+}
