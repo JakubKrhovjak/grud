@@ -6,6 +6,8 @@ kind: ManagedCertificate
 metadata:
   name: grafana-managed-cert
   namespace: infra
+  annotations:
+    helm.sh/resource-policy: keep
 spec:
   domains:
     - grafana.grudapp.com
