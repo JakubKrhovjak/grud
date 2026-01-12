@@ -43,6 +43,15 @@ resource "google_dns_record_set" "grafana" {
   rrdatas      = [data.google_compute_global_address.ingress_ip.address]
 }
 
+# Admin panel subdomain
+resource "google_dns_record_set" "admin" {
+  name         = "admin.${google_dns_managed_zone.grudapp.dns_name}"
+  managed_zone = google_dns_managed_zone.grudapp.name
+  type         = "A"
+  ttl          = 300
+  rrdatas      = [data.google_compute_global_address.ingress_ip.address]
+}
+
 # =============================================================================
 # SSL Certificate (shared by all Ingresses)
 # =============================================================================
@@ -50,6 +59,6 @@ resource "google_compute_managed_ssl_certificate" "grud" {
   name = "grud-cert"
 
   managed {
-    domains = ["grudapp.com", "grafana.grudapp.com"]
+    domains = ["grudapp.com", "grafana.grudapp.com", "admin.grudapp.com"]
   }
 }

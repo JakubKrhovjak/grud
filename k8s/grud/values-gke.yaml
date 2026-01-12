@@ -90,7 +90,13 @@ projectService:
 
 adminPanel:
   enabled: true
-  replicaCount: 0
+  replicaCount: 1
+  ingress:
+    enabled: true
+    host: admin.grudapp.com
+  service:
+    type: ClusterIP
+    port: 80
   resources:
     requests:
       memory: "256Mi"

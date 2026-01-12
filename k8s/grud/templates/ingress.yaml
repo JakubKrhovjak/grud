@@ -1,4 +1,16 @@
 {{- if .Values.ingress.enabled }}
+{{- if eq .Values.global.environment "gcp-gke" }}
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: grud-frontend-config
+  namespace: {{ .Values.global.namespace }}
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -10,6 +22,7 @@ metadata:
     kubernetes.io/ingress.class: "gce"
     kubernetes.io/ingress.global-static-ip-name: "grud-ingress-ip"
     ingress.gcp.kubernetes.io/pre-shared-cert: "grud-cert"
+    networking.gke.io/v1beta1.FrontendConfig: "grud-frontend-config"
     {{- end }}
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
@@ -51,4 +64,31 @@ spec:
   tls:
     {{- toYaml .Values.ingress.tls | nindent 4 }}
   {{- end }}
+{{- end }}
+{{- if and .Values.adminPanel.enabled .Values.adminPanel.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin-panel-ingress
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    {{- if eq .Values.global.environment "gcp-gke" }}
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "grud-ingress-ip"
+    ingress.gcp.kubernetes.io/pre-shared-cert: "grud-cert"
+    networking.gke.io/v1beta1.FrontendConfig: "grud-frontend-config"
+    {{- end }}
+spec:
+  rules:
+    - host: {{ .Values.adminPanel.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-panel
+                port:
+                  number: {{ .Values.adminPanel.service.port }}
 {{- end }}
