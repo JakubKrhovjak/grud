@@ -262,15 +262,24 @@ tf/apply: ## Apply Terraform configuration
 	@cd $(TF_DIR) && terraform apply -auto-approve
 	@echo "✅ Terraform applied"
 
-tf/destroy: ## Destroy Terraform resources (preserves DNS, certs, IPs)
+tf/destroy: ## Destroy Terraform resources (preserves DNS, Gateway certs, IPs)
 	@echo "🗑️  Destroying Terraform resources..."
-	@echo "🛡️  Removing protected resources from state (DNS, certs, IPs)..."
+	@echo "🛡️  Removing protected resources from state..."
+	@echo "    - DNS zone and records"
 	@cd $(TF_DIR) && terraform state rm google_dns_managed_zone.grudapp 2>/dev/null || true
 	@cd $(TF_DIR) && terraform state rm google_dns_record_set.root 2>/dev/null || true
 	@cd $(TF_DIR) && terraform state rm google_dns_record_set.grafana 2>/dev/null || true
 	@cd $(TF_DIR) && terraform state rm google_dns_record_set.admin 2>/dev/null || true
-	@cd $(TF_DIR) && terraform state rm google_compute_managed_ssl_certificate.grud 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_dns_record_set.cert_validation 2>/dev/null || true
+	@echo "    - Static IP"
 	@cd $(TF_DIR) && terraform state rm 'data.google_compute_global_address.ingress_ip' 2>/dev/null || true
+	@echo "    - Certificate Manager (Gateway API)"
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate_map.grud 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_dns_authorization.grudapp 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate.grud 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate_map_entry.root 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate_map_entry.wildcard 2>/dev/null || true
+	@echo "📝 Note: Old Ingress SSL cert (google_compute_managed_ssl_certificate.grud) WILL be deleted"
 	@echo "🚀 Running terraform destroy..."
 	@cd $(TF_DIR) && terraform destroy -auto-approve
 
