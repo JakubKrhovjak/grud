@@ -6,7 +6,7 @@ metadata:
   name: admin-panel-config
   namespace: {{ .Values.global.namespace }}
 data:
-  VITE_API_URL: "http://localhost:8080"
+  VITE_API_URL: {{ .Values.adminPanel.config.apiUrl | default "http://localhost:8080" | quote }}
 ---
 apiVersion: v1
 kind: Service

@@ -1666,7 +1666,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "sum(rate(student_service_messages_sent_total{job=\"$job\"}[5m]))",
+              "expr": "sum(rate(student_service_messages_sent{service_name=\"student-service\"}[5m]))",
               "legendFormat": "Sent",
               "range": true,
               "refId": "A"
@@ -1752,7 +1752,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "student_service_students_viewed_total{job=\"$job\"}",
+              "expr": "student_service_students_viewed{service_name=\"student-service\"}",
               "legendFormat": "Total Views",
               "range": true,
               "refId": "A"
@@ -1826,7 +1826,7 @@ data:
                 "uid": "prometheus"
               },
               "editorMode": "code",
-              "expr": "student_service_messages_sent_total{job=\"$job\"}",
+              "expr": "student_service_messages_sent{service_name=\"student-service\"}",
               "legendFormat": "Total Messages",
               "range": true,
               "refId": "A"
