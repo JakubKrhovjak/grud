@@ -1,20 +1,41 @@
 # =============================================================================
 # HTTPRoute for Student Service API (grudapp.com)
 # =============================================================================
+# Routes HTTPS traffic from the main domain to student-service backend.
+#
+# Traffic flow:
+#   Internet → Gateway (HTTPS:443) → HTTPRoute → Service → Pods
+#
+# Endpoints:
+#   - https://grudapp.com/api/*    → student-service:8080
+#   - https://grudapp.com/auth/*   → student-service:8080
+#   - https://grudapp.com/health   → student-service:8080
+#
+# Related resources:
+#   - Gateway: grud-gateway (k8s/gateway/gateway.yaml)
+#   - Service: student-service (k8s/grud/student-service/service.yaml)
+#   - HealthCheck: student-service-healthcheck (healthcheck-policies.yaml)
+#   - BackendPolicy: student-service-backend-policy (gcp-backend-policy.yaml)
+#
+# Docs: https://gateway-api.sigs.k8s.io/api-types/httproute/
+# =============================================================================
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: api-route
   namespace: grud
 spec:
+  # Reference to parent Gateway
   parentRefs:
     - name: grud-gateway
       namespace: grud
-      sectionName: https  # Only match HTTPS traffic
+      sectionName: https  # Only match HTTPS listener (port 443)
+  # Hostname matching
   hostnames:
     - "grudapp.com"
+  # Routing rules (evaluated in order)
   rules:
-    # /api/* -> student-service
+    # /api/* -> student-service (REST API endpoints)
     - matches:
         - path:
             type: PathPrefix
@@ -22,7 +43,7 @@ spec:
       backendRefs:
         - name: student-service
           port: 8080
-    # /auth/* -> student-service
+    # /auth/* -> student-service (login, register, JWT)
     - matches:
         - path:
             type: PathPrefix
@@ -30,7 +51,7 @@ spec:
       backendRefs:
         - name: student-service
           port: 8080
-    # /health -> student-service
+    # /health -> student-service (health check endpoint)
     - matches:
         - path:
             type: PathPrefix

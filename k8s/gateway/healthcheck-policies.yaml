@@ -1,9 +1,61 @@
 # =============================================================================
 # Health Check Policies for GKE Gateway API
 # =============================================================================
-# Custom health checks for services that don't respond to / healthcheck
+# Defines how GCP Load Balancer checks if backend pods are healthy.
+# HealthCheckPolicy must be in the same namespace as the target Service.
+#
+# How it works:
+#   1. GCP LB sends HTTP request to pod's health endpoint
+#   2. Pod responds with 200 OK if healthy
+#   3. LB marks pod as healthy/unhealthy based on thresholds
+#   4. Unhealthy pods are removed from rotation
+#
+# Configuration:
+#   - checkIntervalSec: How often to check (default 5s)
+#   - timeoutSec: Max wait for response (default 5s)
+#   - healthyThreshold: Consecutive successes to mark healthy (default 2)
+#   - unhealthyThreshold: Consecutive failures to mark unhealthy (default 2)
+#   - logConfig.enabled: Log health check results to Cloud Logging
+#
+# Note: Without HealthCheckPolicy, GCP LB uses default health check on /
+#       which may not work for services with custom health endpoints.
+#
+# Docs: https://cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# Student Service Health Check
+# -----------------------------------------------------------------------------
+# Backend: student-service:8080
+# Endpoint: GET /health → 200 OK
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: student-service-healthcheck
+  namespace: grud
+spec:
+  default:
+    checkIntervalSec: 15       # Check every 15 seconds
+    timeoutSec: 5              # Timeout after 5 seconds
+    healthyThreshold: 1        # 1 success = healthy
+    unhealthyThreshold: 2      # 2 failures = unhealthy
+    logConfig:
+      enabled: true            # Log to Cloud Logging
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8080             # Container port (not service port)
+        requestPath: /health   # Health endpoint
+  targetRef:
+    group: ""
+    kind: Service
+    name: student-service
+---
+# -----------------------------------------------------------------------------
+# Grafana Health Check
+# -----------------------------------------------------------------------------
+# Backend: grafana-gateway:80 (proxies to grafana:3000)
+# Endpoint: GET /api/health → 200 OK
 apiVersion: networking.gke.io/v1
 kind: HealthCheckPolicy
 metadata:
@@ -11,15 +63,17 @@ metadata:
   namespace: infra
 spec:
   default:
-    checkIntervalSec: 15
-    timeoutSec: 5
-    healthyThreshold: 1
-    unhealthyThreshold: 2
+    checkIntervalSec: 15       # Check every 15 seconds
+    timeoutSec: 5              # Timeout after 5 seconds
+    healthyThreshold: 1        # 1 success = healthy
+    unhealthyThreshold: 2      # 2 failures = unhealthy
+    logConfig:
+      enabled: true            # Log to Cloud Logging
     config:
       type: HTTP
       httpHealthCheck:
-        port: 3000
-        requestPath: /api/health
+        port: 3000             # Grafana container port
+        requestPath: /api/health  # Grafana health endpoint
   targetRef:
     group: ""
     kind: Service

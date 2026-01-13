@@ -1,10 +1,66 @@
 # =============================================================================
 # GCPBackendPolicy for Gateway API
 # =============================================================================
-# Configures IAP authentication for Grafana via Gateway API
-# Note: Requires grafana-iap-secret with OAuth credentials
+# Configures GCP Load Balancer backend settings for each service.
+# GCPBackendPolicy must be in the same namespace as the target Service.
+#
+# Replaces the old BackendConfig (cloud.google.com/v1) which doesn't work
+# with Gateway API.
+#
+# Available settings:
+#   - timeoutSec: Backend request timeout (default 30s)
+#   - connectionDraining: Graceful shutdown timeout
+#   - logging: HTTP access logging to Cloud Logging
+#   - sessionAffinity: Sticky sessions (CLIENT_IP, GENERATED_COOKIE)
+#   - securityPolicy: Cloud Armor WAF policy
+#   - iap: Identity-Aware Proxy (Google authentication)
+#
+# Docs: https://cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# Student Service Backend Policy
+# -----------------------------------------------------------------------------
+# Configures timeouts, connection draining, and logging for the main API.
+# No IAP - public API endpoints.
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: student-service-backend-policy
+  namespace: grud
+spec:
+  default:
+    # Request timeout - max time to wait for backend response
+    timeoutSec: 30
+    # Connection draining - graceful shutdown during rolling updates
+    connectionDraining:
+      drainingTimeoutSec: 30   # Wait 30s for in-flight requests
+    # HTTP access logging
+    logging:
+      enabled: true
+      sampleRate: 500000       # 50% of requests (0=none, 1000000=all)
+  targetRef:
+    group: ""
+    kind: Service
+    name: student-service
+---
+# -----------------------------------------------------------------------------
+# Grafana Backend Policy (IAP Protected)
+# -----------------------------------------------------------------------------
+# Configures IAP authentication for Grafana.
+# Users must authenticate with Google before accessing Grafana.
+#
+# IAP Flow:
+#   1. User visits https://grafana.grudapp.com
+#   2. GCP LB intercepts and redirects to Google login
+#   3. User authenticates with Google account
+#   4. IAP checks if user has roles/iap.httpsResourceAccessor
+#   5. If authorized, request is forwarded to Grafana
+#
+# Prerequisites:
+#   - OAuth client created in GCP Console
+#   - client_secret stored in grafana-iap-secret
+#   - User added to IAP authorized users (terraform/iap.tf)
 apiVersion: networking.gke.io/v1
 kind: GCPBackendPolicy
 metadata:
@@ -12,11 +68,23 @@ metadata:
   namespace: infra
 spec:
   default:
+    # Identity-Aware Proxy configuration
     iap:
       enabled: true
+      # OAuth client ID (from GCP Console)
       clientID: "966988225682-kulk7ud2oletuctlv880sc0k1k81a9l9.apps.googleusercontent.com"
+      # Reference to Kubernetes Secret with client_secret
       oauth2ClientSecret:
-        name: grafana-iap-secret
+        name: grafana-iap-secret  # Must contain only 'client_secret' key
+    # Request timeout
+    timeoutSec: 30
+    # Connection draining
+    connectionDraining:
+      drainingTimeoutSec: 30
+    # HTTP access logging
+    logging:
+      enabled: true
+      sampleRate: 500000
   targetRef:
     group: ""
     kind: Service

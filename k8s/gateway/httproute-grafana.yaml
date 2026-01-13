@@ -1,19 +1,45 @@
 # =============================================================================
 # HTTPRoute for Grafana (grafana.grudapp.com)
 # =============================================================================
+# Routes HTTPS traffic to Grafana monitoring dashboard.
+# Protected by Cloud IAP - requires Google authentication.
+#
+# Traffic flow:
+#   Internet → Gateway → IAP Auth → HTTPRoute → Service → Grafana Pod
+#
+# Endpoints:
+#   - https://grafana.grudapp.com/* → grafana-gateway:80 (IAP protected)
+#
+# Cross-namespace routing:
+#   This HTTPRoute is in 'infra' namespace but references Gateway in 'grud'.
+#   Requires ReferenceGrant (k8s/gateway/reference-grant.yaml) to allow this.
+#
+# Related resources:
+#   - Gateway: grud-gateway (k8s/gateway/gateway.yaml)
+#   - Service: grafana-gateway (k8s/infra/grafana-gateway-service.yaml)
+#   - ReferenceGrant: allow-gateway-from-infra (reference-grant.yaml)
+#   - HealthCheck: grafana-healthcheck (healthcheck-policies.yaml)
+#   - BackendPolicy: grafana-iap-policy (gcp-backend-policy.yaml) - IAP config
+#
+# Docs: https://gateway-api.sigs.k8s.io/api-types/httproute/
+# =============================================================================
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: grafana-route
-  namespace: infra
+  namespace: infra  # Different namespace than Gateway
 spec:
+  # Reference to parent Gateway (cross-namespace, requires ReferenceGrant)
   parentRefs:
     - name: grud-gateway
       namespace: grud
-      sectionName: https  # Only match HTTPS traffic
+      sectionName: https  # Only match HTTPS listener (port 443)
+  # Hostname matching
   hostnames:
     - "grafana.grudapp.com"
+  # Routing rules
   rules:
+    # All paths → grafana-gateway service
     - matches:
         - path:
             type: PathPrefix
