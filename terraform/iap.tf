@@ -3,6 +3,11 @@
 # =============================================================================
 # Protects Grafana with Google authentication.
 #
+# TODO: Implement Workforce Identity Federation with Okta
+#       - Replace Google Identity with Okta SSO
+#       - Requires: GCP Organization, Okta OIDC app
+#       - See: https://cloud.google.com/iam/docs/workforce-identity-federation
+#
 # Prerequisites:
 #   - OAuth consent screen must be configured in GCP Console
 #     (APIs & Services → OAuth consent screen)

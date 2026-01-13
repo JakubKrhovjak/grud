@@ -45,10 +45,13 @@ GCP Project
 ├── Google Secret Manager
 │   ├── grud-jwt-secret
 │   ├── grud-student-db-credentials
-│   └── grud-project-db-credentials
+│   ├── grud-project-db-credentials
+│   └── grafana-iap-credentials (OAuth client_id + client_secret)
 │
 ├── Cloud IAP (Identity-Aware Proxy)
-│   └── Protects Grafana with Google authentication
+│   ├── OAuth Brand (consent screen)
+│   ├── OAuth Client (auto-generated credentials)
+│   └── Authorized users (Terraform-managed)
 │
 └── External Secrets Operator (Helm)
     └── Syncs GSM secrets to Kubernetes
@@ -162,7 +165,7 @@ make gke/deploy
 | `secrets.tf` | Google Secret Manager secrets |
 | `iam.tf` | Service accounts and IAM bindings |
 | `helm.tf` | External Secrets Operator |
-| `iap.tf` | Cloud IAP configuration notes |
+| `iap.tf` | Cloud IAP OAuth client, credentials, and authorized users |
 | `outputs.tf` | Terraform outputs |
 | `variables.tf` | Input variables |
 | `versions.tf` | Provider version constraints |
@@ -208,26 +211,67 @@ connect_gateway_users = [
 
 Grafana is protected by Cloud Identity-Aware Proxy (IAP). Users must authenticate with Google before accessing Grafana.
 
-### Setup (already done in Terraform)
+### What Terraform creates
 
-1. IAP API enabled (`apis.tf`)
-2. OAuth consent screen configured (manual in Console)
-3. OAuth credentials created (manual in Console)
-4. BackendConfig with IAP enabled (`k8s/infra/grafana-ingress.yaml`)
+| Resource | Description |
+|----------|-------------|
+| `google_iap_brand` | OAuth consent screen |
+| `google_iap_client` | OAuth client (credentials auto-generated) |
+| `google_secret_manager_secret` | Stores OAuth credentials |
+| `google_iap_web_iam_member` | Authorized users |
+
+OAuth credentials are automatically stored in Secret Manager and synced to Kubernetes via External Secrets.
+
+### Authorized Users
+
+Users are managed in `iap.tf`. Current users:
+- `cloudarunning@gmail.com`
+- `jakub.krhovjak@protonmail.com`
 
 ### Adding users
 
-1. Go to: https://console.cloud.google.com/security/iap
-2. Select the Grafana backend service
-3. Add users with "IAP-secured Web App User" role
+Add users to the list in `iap.tf`:
 
-Or via gcloud:
-```bash
-gcloud iap web add-iam-policy-binding \
-  --member="user:newuser@company.com" \
-  --role="roles/iap.httpsResourceAccessor" \
-  --project=rugged-abacus-483006-r5
+```hcl
+resource "google_iap_web_iam_member" "grafana_users" {
+  for_each = toset([
+    "user:cloudarunning@gmail.com",
+    "user:jakub.krhovjak@protonmail.com",
+    "user:newuser@company.com"  # Add new users here
+  ])
+  ...
+}
 ```
+
+Then run:
+```bash
+make tf/apply
+```
+
+### Kubernetes Integration
+
+IAP credentials flow from Terraform to Kubernetes:
+
+```
+Terraform (iap.tf)
+    │
+    ▼
+Secret Manager (grafana-iap-credentials)
+    │
+    ▼
+External Secrets Operator
+    │
+    ▼
+Kubernetes Secret (grafana-iap-secret in infra namespace)
+    │
+    ▼
+BackendConfig (k8s/infra/grafana-ingress.yaml)
+```
+
+### Future: Okta Integration
+
+TODO: Implement Workforce Identity Federation with Okta for enterprise SSO.
+See `iap.tf` for details.
 
 ## DNS Configuration
 
@@ -353,11 +397,21 @@ kubectl describe secretstore -n grud
 # Check BackendConfig
 kubectl get backendconfig -n infra grafana-backend-config -o yaml
 
-# Check IAP secret exists
+# Check IAP secret exists (created by External Secrets)
 kubectl get secret -n infra grafana-iap-secret
 
-# Verify OAuth redirect URI includes:
-# https://iap.googleapis.com/v1/oauth/clientIds/CLIENT_ID:handleRedirect
+# Check ExternalSecret status
+kubectl describe externalsecret -n infra grafana-iap-secret
+
+# Check SecretStore in infra namespace
+kubectl describe secretstore -n infra gcpsm-secret-store
+
+# Verify secret in Secret Manager
+gcloud secrets versions access latest --secret=grafana-iap-credentials
+
+# Check IAP OAuth client exists
+gcloud iap oauth-clients list \
+  --brand="projects/PROJECT_NUMBER/brands/PROJECT_NUMBER"
 ```
 
 ## Destroying Infrastructure
