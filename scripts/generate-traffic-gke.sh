@@ -21,15 +21,26 @@ PASSWORD="TestPassword123!"
 DELAY=0.01
 COOKIE_FILE="/tmp/student_cookies_$(date +%s).txt"
 
-# Auto-detect GKE ingress host (domain) or IP
+# Auto-detect GKE Gateway or Ingress URL
 get_ingress_url() {
-  # Try to get host (domain) first
+  # Try Gateway API first
+  HOST=$(kubectl get gateway -n grud grud-gateway -o jsonpath='{.spec.listeners[0].hostname}' 2>/dev/null)
+  if [ -n "$HOST" ] && [ "$HOST" != "*" ]; then
+    echo "https://${HOST}"
+    return
+  fi
+  # Try Gateway IP
+  IP=$(kubectl get gateway -n grud grud-gateway -o jsonpath='{.status.addresses[0].value}' 2>/dev/null)
+  if [ -n "$IP" ]; then
+    echo "https://grudapp.com"  # Use domain for proper cert
+    return
+  fi
+  # Fallback to Ingress (legacy)
   HOST=$(kubectl get ingress -n grud grud-ingress -o jsonpath='{.spec.rules[0].host}' 2>/dev/null)
   if [ -n "$HOST" ]; then
     echo "https://${HOST}"
     return
   fi
-  # Fallback to IP
   IP=$(kubectl get ingress -n grud grud-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
   if [ -n "$IP" ]; then
     echo "http://${IP}"

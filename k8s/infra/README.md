@@ -91,13 +91,11 @@ Grafana is protected by Cloud Identity-Aware Proxy:
 2. **Authentication**: Google account (IAP)
 3. **Grafana login**: admin / admin (after IAP auth)
 
-**Add IAP users:**
-```bash
-gcloud iap web add-iam-policy-binding \
-  --member="user:newuser@company.com" \
-  --role="roles/iap.httpsResourceAccessor" \
-  --project=rugged-abacus-483006-r5
-```
+**Authorized users** (managed in `terraform/iap.tf`):
+- cloudarunning@gmail.com
+- jakub.krhovjak@protonmail.com
+
+To add users, edit `terraform/iap.tf` and run `make tf/apply`.
 
 ### Kind (local)
 
@@ -119,7 +117,8 @@ make gke/grafana
 | `tempo-values.yaml` | Tempo configuration |
 | `nats.yaml` | NATS deployment |
 | `alerting-rules.yaml` | PrometheusRule for alerts |
-| `grafana-ingress.yaml` | GCE Ingress + IAP for Grafana |
+| `grafana-ingress.yaml` | GCE Ingress + IAP BackendConfig for Grafana |
+| `grafana-iap-external-secret.yaml` | External Secret for IAP credentials |
 | `grafana-dashboard-configmap.yaml` | Custom dashboards |
 | `grafana-datasources.yaml` | Loki/Tempo datasources |
 
@@ -132,20 +131,47 @@ The `grafana-ingress.yaml` configures:
 3. **Service**: ClusterIP service for GCE Ingress
 4. **Ingress**: GCE Ingress with static IP
 
-### IAP Setup
+### IAP Setup (Automated)
 
-IAP requires OAuth credentials:
+IAP is fully managed by Terraform:
 
-1. Create OAuth consent screen in GCP Console
-2. Create OAuth 2.0 Client ID (Web application)
-3. Add redirect URI: `https://iap.googleapis.com/v1/oauth/clientIds/CLIENT_ID:handleRedirect`
-4. Create Kubernetes secret:
-   ```bash
-   kubectl create secret generic grafana-iap-secret \
-     -n infra \
-     --from-literal=client_id=YOUR_CLIENT_ID \
-     --from-literal=client_secret=YOUR_CLIENT_SECRET
+1. **Terraform creates:**
+   - OAuth consent screen (`google_iap_brand`)
+   - OAuth client with credentials (`google_iap_client`)
+   - Credentials stored in Secret Manager (`grafana-iap-credentials`)
+   - Authorized users (`google_iap_web_iam_member`)
+
+2. **External Secrets syncs credentials to Kubernetes:**
+   - `grafana-iap-external-secret.yaml` defines the ExternalSecret
+   - Creates `grafana-iap-secret` in infra namespace automatically
+
+3. **BackendConfig references the secret:**
+   ```yaml
+   spec:
+     iap:
+       enabled: true
+       oauthclientCredentials:
+         secretName: grafana-iap-secret
    ```
+
+**No manual steps required** - just run `terraform apply` and deploy the manifests.
+
+### Adding IAP Users
+
+Edit `terraform/iap.tf`:
+
+```hcl
+resource "google_iap_web_iam_member" "grafana_users" {
+  for_each = toset([
+    "user:cloudarunning@gmail.com",
+    "user:jakub.krhovjak@protonmail.com",
+    "user:newuser@company.com"  # Add here
+  ])
+  ...
+}
+```
+
+Then: `make tf/apply`
 
 ## Metrics
 
@@ -203,11 +229,17 @@ kubectl get ingress -n infra grafana-ingress
 # Check backend health
 kubectl describe ingress -n infra grafana-ingress
 
-# Check IAP secret
+# Check IAP secret (created by External Secrets)
 kubectl get secret -n infra grafana-iap-secret
 
-# Check certificate status
-kubectl get managedcertificate -n infra grafana-managed-cert
+# Check ExternalSecret status
+kubectl describe externalsecret -n infra grafana-iap-secret
+
+# Check SecretStore
+kubectl describe secretstore -n infra gcpsm-secret-store
+
+# Check BackendConfig
+kubectl get backendconfig -n infra grafana-backend-config -o yaml
 ```
 
 ### Alloy not receiving metrics

@@ -1,0 +1,45 @@
+# =============================================================================
+# GCPGatewayPolicy for Gateway API
+# =============================================================================
+# Configures GCP Load Balancer frontend settings (Gateway-level).
+# GCPGatewayPolicy must be in the same namespace as the target Gateway.
+#
+# This is the Gateway API equivalent of FrontendConfig for Ingress.
+#
+# Available settings:
+#   - sslPolicy: TLS/SSL configuration (cipher suites, min TLS version)
+#   - allowGlobalAccess: Enable for internal gateways (not used here)
+#
+# SSL Policy Profiles:
+#   - COMPATIBLE: Wide compatibility, supports older clients (TLS 1.0+)
+#   - MODERN: Recommended, good security/compatibility balance (TLS 1.2+)
+#   - RESTRICTED: Most secure, limited cipher suites (TLS 1.2+)
+#   - CUSTOM: Define your own cipher suites
+#
+# Why SSL Policy?
+#   - Enforces minimum TLS version (prevents downgrade attacks)
+#   - Removes weak cipher suites
+#   - Required for PCI-DSS, HIPAA compliance
+#
+# Prerequisites:
+#   - SSL policy must be created in GCP first
+#   - Terraform: terraform/ssl.tf
+#   - Manual: gcloud compute ssl-policies create grud-ssl-policy \
+#               --profile MODERN --min-tls-version 1.2
+#
+# Docs: https://cloud.google.com/kubernetes-engine/docs/how-to/configure-gateway-resources
+# =============================================================================
+
+apiVersion: networking.gke.io/v1
+kind: GCPGatewayPolicy
+metadata:
+  name: grud-gateway-policy
+  namespace: grud
+spec:
+  default:
+    # Reference to GCP SSL policy (created in terraform/ssl.tf)
+    sslPolicy: grud-ssl-policy   # MODERN profile, TLS 1.2+
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: grud-gateway

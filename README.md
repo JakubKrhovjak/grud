@@ -78,11 +78,11 @@ open https://grafana.grudapp.com      # Grafana (IAP protected)
 | Feature | Description |
 |---------|-------------|
 | **Connect Gateway** | Access cluster from anywhere without IP whitelisting |
-| **Cloud IAP** | Google authentication for Grafana |
+| **Cloud IAP** | Google authentication for Grafana (fully automated via Terraform) |
 | **HTTPS** | Google-managed SSL certificates |
 | **Private Nodes** | GKE nodes have no public IPs |
 | **Workload Identity** | Secure GCP API access without keys |
-| **Secret Manager** | Secrets stored in GSM, synced via ESO |
+| **Secret Manager** | Secrets stored in GSM, synced via External Secrets |
 
 ## Technologies
 
@@ -277,11 +277,17 @@ export PATH="/opt/homebrew/share/google-cloud-sdk/bin:$PATH"
 ### Grafana IAP error
 
 ```bash
-# Check IAP secret
+# Check IAP secret (created by External Secrets)
 kubectl get secret -n infra grafana-iap-secret
 
+# Check ExternalSecret status
+kubectl describe externalsecret -n infra grafana-iap-secret
+
 # Check BackendConfig
-kubectl get backendconfig -n infra grafana-backend-config
+kubectl get backendconfig -n infra grafana-backend-config -o yaml
+
+# Verify credentials in Secret Manager
+gcloud secrets versions access latest --secret=grafana-iap-credentials
 ```
 
 ### Pods not starting

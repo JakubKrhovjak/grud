@@ -1,0 +1,39 @@
+# =============================================================================
+# ReferenceGrant - Allow cross-namespace Gateway references
+# =============================================================================
+# Gateway API security feature that controls cross-namespace references.
+# Without this, HTTPRoutes can only reference resources in their own namespace.
+#
+# Why needed?
+#   - Gateway is in 'grud' namespace
+#   - Grafana HTTPRoute is in 'infra' namespace
+#   - By default, infra cannot reference grud resources
+#   - ReferenceGrant explicitly allows this cross-namespace access
+#
+# Security model:
+#   - ReferenceGrant is created in the TARGET namespace (grud)
+#   - It grants permission TO resources FROM other namespaces
+#   - Only specific resources/namespaces are allowed
+#
+# This grant allows:
+#   FROM: HTTPRoutes in 'infra' namespace
+#   TO: Gateway 'grud-gateway' in 'grud' namespace
+#
+# Docs: https://gateway-api.sigs.k8s.io/api-types/referencegrant/
+# =============================================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: ReferenceGrant
+metadata:
+  name: allow-gateway-from-infra
+  namespace: grud  # Target namespace (where Gateway lives)
+spec:
+  # Who can reference (source)
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: infra  # Allow HTTPRoutes from infra namespace
+  # What can be referenced (target)
+  to:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: grud-gateway  # Allow referencing this specific Gateway

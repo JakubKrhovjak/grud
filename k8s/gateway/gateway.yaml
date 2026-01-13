@@ -1,0 +1,73 @@
+# =============================================================================
+# GKE Gateway - Shared entry point for all services
+# =============================================================================
+# Central Gateway that handles all external traffic for the GRUD application.
+# HTTPRoutes in various namespaces attach to this Gateway for routing.
+#
+# Architecture:
+#   Internet → Static IP → Gateway → HTTPRoutes → Services → Pods
+#
+# GatewayClass options:
+#   - gke-l7-global-external-managed: Global external LB (used here)
+#   - gke-l7-regional-external-managed: Regional external LB
+#   - gke-l7-rilb: Regional internal LB
+#   - gke-l7-gxlb: Classic global external LB
+#
+# Features:
+#   - Single static IP for all domains (cost effective)
+#   - Certificate Manager for TLS (wildcard cert)
+#   - HTTP to HTTPS redirect via HTTPRoute
+#   - Cross-namespace routing via ReferenceGrant
+#
+# Prerequisites:
+#   - Gateway API enabled on GKE cluster (terraform: gke.tf)
+#   - Certificate Manager certificate map (terraform: dns.tf)
+#   - Static IP (terraform: ingress.tf)
+#   - SSL policy (terraform: ssl.tf)
+#
+# Related resources:
+#   - HTTPRoutes: httproute-*.yaml (routing rules)
+#   - ReferenceGrant: reference-grant.yaml (cross-namespace access)
+#   - HealthCheckPolicy: healthcheck-policies.yaml
+#   - GCPBackendPolicy: gcp-backend-policy.yaml (IAP, timeouts)
+#   - GCPGatewayPolicy: gcp-gateway-policy.yaml (SSL policy)
+#
+# Apply: kubectl apply -f k8s/gateway/ OR make gke/gateway
+#
+# Docs: https://cloud.google.com/kubernetes-engine/docs/how-to/deploying-gateways
+# =============================================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: grud-gateway
+  namespace: grud
+  annotations:
+    # Certificate Manager certificate map for TLS termination
+    # Contains wildcard cert: *.grudapp.com + grudapp.com
+    # Created in terraform/dns.tf
+    networking.gke.io/certmap: grud-certmap
+spec:
+  # GKE-managed global external Application Load Balancer
+  gatewayClassName: gke-l7-global-external-managed
+  # Static IP address (created in terraform/ingress.tf)
+  addresses:
+    - type: NamedAddress
+      value: grud-ingress-ip  # 35.201.103.144
+  # Listeners define which ports/protocols the Gateway accepts
+  listeners:
+    # HTTPS listener (port 443) - main traffic
+    - name: https
+      protocol: HTTPS
+      port: 443
+      # TLS is handled by Certificate Manager (via certmap annotation)
+      # No need for certificateRefs when using certmap
+      allowedRoutes:
+        namespaces:
+          from: All  # Allow HTTPRoutes from any namespace
+    # HTTP listener (port 80) - for redirect only
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All  # http-redirect.yaml handles 301 to HTTPS

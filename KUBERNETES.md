@@ -473,7 +473,9 @@ For production deployment on Google Kubernetes Engine, see [terraform/README.md]
 Key differences from Kind:
 - **Database**: Cloud SQL PostgreSQL (instead of CloudNativePG)
 - **Secrets**: Google Secret Manager + External Secrets Operator
-- **Ingress**: GCE Ingress with static IP and managed SSL
+- **Traffic**: Gateway API with Certificate Manager (instead of Ingress)
+- **TLS**: Wildcard certificate via Certificate Manager DNS authorization
+- **Security**: Cloud IAP for Grafana, SSL policy (TLS 1.2+)
 - **Node Pools**: Separate infra and app pools with taints
 
 Quick GKE deployment:
@@ -483,10 +485,165 @@ Quick GKE deployment:
 make gke/full-deploy
 
 # Or step by step:
-make tf/apply           # Deploy GKE + Cloud SQL + Secrets
+make tf/apply           # Deploy GKE + Cloud SQL + Secrets + DNS
 make gke/connect        # Get cluster credentials
 make infra/deploy-gke   # Deploy observability stack
+make gke/gateway        # Deploy Gateway API resources
 make gke/deploy         # Deploy application
+```
+
+### Gateway API Resources
+
+```
+k8s/gateway/
+├── gateway.yaml              # Main Gateway (gke-l7-global-external-managed)
+├── http-redirect.yaml        # HTTP to HTTPS redirect
+├── httproute-*.yaml          # Routes for each domain
+├── healthcheck-policies.yaml # HealthCheckPolicy for services
+├── gcp-backend-policy.yaml   # IAP, timeouts, logging
+└── gcp-gateway-policy.yaml   # SSL policy
+```
+
+### Gateway API Architecture
+
+```
+                                    Internet
+                                        │
+                                        ▼
+                              ┌─────────────────┐
+                              │   Static IP     │
+                              │ 35.201.103.144  │
+                              └────────┬────────┘
+                                       │
+                              ┌────────▼────────┐
+                              │     Gateway     │
+                              │  (grud-gateway) │
+                              │                 │
+                              │ - HTTPS :443    │
+                              │ - HTTP :80      │
+                              │ - CertMap TLS   │
+                              │ - SSL Policy    │
+                              └────────┬────────┘
+                                       │
+           ┌───────────────────────────┼───────────────────────────┐
+           │                           │                           │
+           ▼                           ▼                           ▼
+    ┌─────────────┐            ┌─────────────┐            ┌─────────────┐
+    │  HTTPRoute  │            │  HTTPRoute  │            │  HTTPRoute  │
+    │ (api-route) │            │(grafana-rte)│            │(admin-route)│
+    │             │            │             │            │             │
+    │grudapp.com  │            │grafana.*    │            │admin.*      │
+    │ /api, /auth │            │ /           │            │ /           │
+    └──────┬──────┘            └──────┬──────┘            └──────┬──────┘
+           │                          │                          │
+           ▼                          ▼                          ▼
+    ┌─────────────┐            ┌─────────────┐            ┌─────────────┐
+    │   Service   │            │   Service   │            │   Service   │
+    │  student-   │            │  grafana-   │            │   admin-    │
+    │  service    │            │  gateway    │            │   panel     │
+    │  :8080      │            │  :80        │            │   :80       │
+    └─────────────┘            └─────────────┘            └─────────────┘
+```
+
+### Gateway API vs Ingress
+
+| Feature | Ingress | Gateway API |
+|---------|---------|-------------|
+| Resource model | Single Ingress | Gateway + HTTPRoute |
+| Multi-tenant | Limited | Native support |
+| Cross-namespace | Annotations | ReferenceGrant |
+| TLS config | Secret reference | Certificate Manager |
+| Backend config | BackendConfig CRD | GCPBackendPolicy |
+| Health checks | BackendConfig | HealthCheckPolicy |
+| SSL policy | FrontendConfig | GCPGatewayPolicy |
+| HTTP→HTTPS | Annotation | HTTPRoute filter |
+
+### GKE-Specific Policies
+
+**GCPGatewayPolicy** - Frontend configuration:
+```yaml
+apiVersion: networking.gke.io/v1
+kind: GCPGatewayPolicy
+spec:
+  default:
+    sslPolicy: grud-ssl-policy  # TLS 1.2+, MODERN ciphers
+  targetRef:
+    kind: Gateway
+    name: grud-gateway
+```
+
+**GCPBackendPolicy** - Backend configuration:
+```yaml
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+spec:
+  default:
+    timeoutSec: 30
+    connectionDraining:
+      drainingTimeoutSec: 30
+    logging:
+      enabled: true
+      sampleRate: 500000
+    iap:                        # Only for Grafana
+      enabled: true
+      clientID: "..."
+      oauth2ClientSecret:
+        name: grafana-iap-secret
+  targetRef:
+    kind: Service
+    name: grafana-gateway
+```
+
+**HealthCheckPolicy** - Custom health checks:
+```yaml
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+spec:
+  default:
+    checkIntervalSec: 15
+    timeoutSec: 5
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8080
+        requestPath: /health
+  targetRef:
+    kind: Service
+    name: student-service
+```
+
+### Deploy Gateway
+
+```bash
+# Deploy all Gateway resources
+make gke/gateway
+
+# Or manually
+kubectl apply -f k8s/gateway/
+
+# Check status
+kubectl get gateway -n grud
+kubectl get httproute -A
+kubectl get gcpbackendpolicy -A
+kubectl get healthcheckpolicy -A
+```
+
+### Troubleshooting Gateway
+
+```bash
+# Check Gateway status
+kubectl describe gateway -n grud grud-gateway
+
+# Check HTTPRoute status
+kubectl describe httproute -n grud api-route
+
+# Check backend health
+kubectl get svc -n grud student-service -o yaml
+
+# Check GCP Load Balancer
+gcloud compute url-maps list
+gcloud compute backend-services list
+gcloud compute forwarding-rules list
 ```
 
 ## Next Steps (Kind)

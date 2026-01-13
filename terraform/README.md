@@ -16,6 +16,7 @@ GCP Project
 ├── GKE Cluster (zonal: europe-west1-b)
 │   ├── Private nodes (no public IPs)
 │   ├── Workload Identity enabled
+│   ├── Gateway API enabled
 │   ├── Connect Gateway access (no IP whitelist needed)
 │   ├── Infra Node Pool (3x e2-medium, spot)
 │   │   └── Prometheus, Grafana, NATS, Loki, Tempo, Alloy
@@ -32,12 +33,21 @@ GCP Project
 │   └── Database: projects (project-service)
 │
 ├── Cloud DNS (grudapp.com)
-│   ├── A record: grudapp.com → Ingress IP
-│   └── A record: grafana.grudapp.com → Grafana IP
+│   ├── A record: grudapp.com → Gateway IP
+│   ├── A record: grafana.grudapp.com → Gateway IP
+│   ├── A record: admin.grudapp.com → Gateway IP
+│   └── CNAME record: _acme-challenge → Certificate Manager
 │
-├── Static IPs (Global)
-│   ├── grud-ingress-ip (application)
-│   └── grafana-ingress-ip (Grafana)
+├── Certificate Manager
+│   ├── DNS Authorization (grudapp.com)
+│   ├── Certificate (*.grudapp.com + grudapp.com)
+│   └── Certificate Map (grud-certmap)
+│
+├── Static IP (Global)
+│   └── grud-ingress-ip (shared by all domains)
+│
+├── SSL Policy
+│   └── grud-ssl-policy (TLS 1.2+, MODERN profile)
 │
 ├── Artifact Registry (grud)
 │   └── Container images with vulnerability scanning
@@ -45,10 +55,12 @@ GCP Project
 ├── Google Secret Manager
 │   ├── grud-jwt-secret
 │   ├── grud-student-db-credentials
-│   └── grud-project-db-credentials
+│   ├── grud-project-db-credentials
+│   └── grafana-iap-credentials (OAuth client_secret)
 │
 ├── Cloud IAP (Identity-Aware Proxy)
-│   └── Protects Grafana with Google authentication
+│   ├── OAuth Client (created manually in Console)
+│   └── Authorized users (Terraform-managed)
 │
 └── External Secrets Operator (Helm)
     └── Syncs GSM secrets to Kubernetes
@@ -153,16 +165,17 @@ make gke/deploy
 |------|-------------|
 | `apis.tf` | Enable required GCP APIs |
 | `vpc.tf` | VPC network, subnets, NAT, firewall |
-| `gke.tf` | GKE cluster and node pools |
+| `gke.tf` | GKE cluster and node pools (with Gateway API) |
 | `fleet.tf` | GKE Fleet membership and Connect Gateway |
 | `cloudsql.tf` | Cloud SQL PostgreSQL instance |
-| `dns.tf` | Cloud DNS zone and records |
+| `dns.tf` | Cloud DNS zone, records, Certificate Manager |
 | `ingress.tf` | Static IP addresses (data sources) |
+| `ssl.tf` | SSL policy (TLS 1.2+, MODERN profile) |
 | `registry.tf` | Artifact Registry with vulnerability scanning |
 | `secrets.tf` | Google Secret Manager secrets |
 | `iam.tf` | Service accounts and IAM bindings |
 | `helm.tf` | External Secrets Operator |
-| `iap.tf` | Cloud IAP configuration notes |
+| `iap.tf` | Cloud IAP authorized users |
 | `outputs.tf` | Terraform outputs |
 | `variables.tf` | Input variables |
 | `versions.tf` | Provider version constraints |
@@ -208,35 +221,89 @@ connect_gateway_users = [
 
 Grafana is protected by Cloud Identity-Aware Proxy (IAP). Users must authenticate with Google before accessing Grafana.
 
-### Setup (already done in Terraform)
+### Setup
 
-1. IAP API enabled (`apis.tf`)
-2. OAuth consent screen configured (manual in Console)
-3. OAuth credentials created (manual in Console)
-4. BackendConfig with IAP enabled (`k8s/infra/grafana-ingress.yaml`)
+IAP OAuth client is created manually in GCP Console (requires organization for API-based creation):
+
+1. Go to: https://console.cloud.google.com/apis/credentials
+2. Create OAuth 2.0 Client ID (Web application)
+3. Add authorized redirect URI: `https://iap.googleapis.com/v1/oauth/clientIds/CLIENT_ID:handleRedirect`
+4. Store `client_secret` in Secret Manager as `grafana-iap-credentials`
+
+### What Terraform manages
+
+| Resource | Description |
+|----------|-------------|
+| `google_iap_web_iam_member` | Authorized users |
+| `data.google_secret_manager_secret` | Reference to OAuth credentials |
+
+### Authorized Users
+
+Users are managed in `iap.tf`. Current users:
+- `cloudarunning@gmail.com`
+- `jakubkrhovjak@gmail.com`
 
 ### Adding users
 
-1. Go to: https://console.cloud.google.com/security/iap
-2. Select the Grafana backend service
-3. Add users with "IAP-secured Web App User" role
+Add users to the list in `iap.tf`:
 
-Or via gcloud:
-```bash
-gcloud iap web add-iam-policy-binding \
-  --member="user:newuser@company.com" \
-  --role="roles/iap.httpsResourceAccessor" \
-  --project=rugged-abacus-483006-r5
+```hcl
+resource "google_iap_web_iam_member" "grafana_users" {
+  for_each = toset([
+    "user:cloudarunning@gmail.com",
+    "user:jakubkrhovjak@gmail.com",
+    "user:newuser@company.com"  # Add new users here
+  ])
+  ...
+}
 ```
+
+Then run:
+```bash
+make tf/apply
+```
+
+### Kubernetes Integration (Gateway API)
+
+IAP is configured via GCPBackendPolicy (replaces BackendConfig for Gateway API):
+
+```
+Secret Manager (grafana-iap-credentials)
+    │
+    ▼
+Kubernetes Secret (grafana-iap-secret in infra namespace)
+    │
+    ▼
+GCPBackendPolicy (k8s/gateway/gcp-backend-policy.yaml)
+    │
+    ▼
+Gateway API Service (grafana-gateway)
+```
+
+### Future: Okta Integration
+
+TODO: Implement Workforce Identity Federation with Okta for enterprise SSO.
+See `iap.tf` for details.
 
 ## DNS Configuration
 
-Cloud DNS manages the `grudapp.com` domain:
+Cloud DNS manages the `grudapp.com` domain with Certificate Manager for TLS:
 
 | Record | Type | Value |
 |--------|------|-------|
-| `grudapp.com` | A | Ingress IP (35.201.103.144) |
-| `grafana.grudapp.com` | A | Grafana IP (34.49.153.44) |
+| `grudapp.com` | A | Gateway IP (35.201.103.144) |
+| `grafana.grudapp.com` | A | Gateway IP (35.201.103.144) |
+| `admin.grudapp.com` | A | Gateway IP (35.201.103.144) |
+| `_acme-challenge.grudapp.com` | CNAME | Certificate Manager DNS auth |
+
+All domains share a single Gateway and static IP, reducing costs.
+
+### Certificate Manager
+
+TLS certificates are managed via Certificate Manager (not Compute SSL):
+- Wildcard certificate: `*.grudapp.com` + `grudapp.com`
+- DNS authorization for automatic renewal
+- Certificate Map attached to Gateway via annotation
 
 ### Nameservers
 
@@ -350,14 +417,24 @@ kubectl describe secretstore -n grud
 ### IAP Not Working
 
 ```bash
-# Check BackendConfig
-kubectl get backendconfig -n infra grafana-backend-config -o yaml
+# Check GCPBackendPolicy
+kubectl get gcpbackendpolicy -n infra grafana-iap-policy -o yaml
 
 # Check IAP secret exists
 kubectl get secret -n infra grafana-iap-secret
 
-# Verify OAuth redirect URI includes:
-# https://iap.googleapis.com/v1/oauth/clientIds/CLIENT_ID:handleRedirect
+# Verify secret has only client_secret key (not client_id)
+kubectl get secret -n infra grafana-iap-secret -o jsonpath='{.data}' | jq
+
+# Check Gateway and HTTPRoute status
+kubectl get gateway -n grud grud-gateway
+kubectl get httproute -n infra grafana-route
+
+# Verify secret in Secret Manager
+gcloud secrets versions access latest --secret=grafana-iap-credentials
+
+# Check IAP is enabled on backend service
+gcloud compute backend-services list --format="table(name,iap.enabled)"
 ```
 
 ## Destroying Infrastructure
@@ -377,6 +454,44 @@ gcloud compute addresses delete grud-ingress-ip --global
 gcloud compute addresses delete grafana-ingress-ip --global
 ```
 
+## Gateway API
+
+This project uses GKE Gateway API instead of Ingress for traffic management.
+
+### Why Gateway API?
+
+| Feature | Ingress | Gateway API |
+|---------|---------|-------------|
+| Multi-tenant | Limited | Full support |
+| Cross-namespace | Complex | Built-in (ReferenceGrant) |
+| TLS management | BackendConfig | GCPGatewayPolicy |
+| Backend config | BackendConfig | GCPBackendPolicy |
+| HTTP to HTTPS | Annotation | HTTPRoute filter |
+| Health checks | BackendConfig | HealthCheckPolicy |
+
+### Gateway Resources
+
+```
+k8s/gateway/
+├── gateway.yaml              # Main Gateway (gke-l7-global-external-managed)
+├── http-redirect.yaml        # HTTP to HTTPS redirect (HTTPRoute)
+├── httproute-api.yaml        # grudapp.com routes
+├── httproute-grafana.yaml    # grafana.grudapp.com routes
+├── httproute-admin.yaml      # admin.grudapp.com routes
+├── reference-grant.yaml      # Cross-namespace access (infra → grud)
+├── healthcheck-policies.yaml # HealthCheckPolicy for services
+├── gcp-backend-policy.yaml   # GCPBackendPolicy (IAP, timeouts, logging)
+└── gcp-gateway-policy.yaml   # GCPGatewayPolicy (SSL policy)
+```
+
+### Deploy Gateway
+
+```bash
+make gke/gateway
+# Or manually:
+kubectl apply -f k8s/gateway/
+```
+
 ## URLs
 
 After deployment:
@@ -384,4 +499,6 @@ After deployment:
 | Service | URL |
 |---------|-----|
 | Application API | https://grudapp.com/api |
+| Health check | https://grudapp.com/health |
 | Grafana | https://grafana.grudapp.com (requires IAP login) |
+| Admin panel | https://admin.grudapp.com |

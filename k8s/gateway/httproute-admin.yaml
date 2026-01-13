@@ -1,0 +1,41 @@
+# =============================================================================
+# HTTPRoute for Admin Panel (admin.grudapp.com)
+# =============================================================================
+# Routes HTTPS traffic to the admin panel React application.
+#
+# Traffic flow:
+#   Internet → Gateway (HTTPS:443) → HTTPRoute → Service → Nginx Pod
+#
+# Endpoints:
+#   - https://admin.grudapp.com/* → admin-panel:80
+#
+# Related resources:
+#   - Gateway: grud-gateway (k8s/gateway/gateway.yaml)
+#   - Service: admin-panel (k8s/grud/admin-panel/service.yaml)
+#
+# Docs: https://gateway-api.sigs.k8s.io/api-types/httproute/
+# =============================================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: admin-route
+  namespace: grud
+spec:
+  # Reference to parent Gateway
+  parentRefs:
+    - name: grud-gateway
+      namespace: grud
+      sectionName: https  # Only match HTTPS listener (port 443)
+  # Hostname matching
+  hostnames:
+    - "admin.grudapp.com"
+  # Routing rules
+  rules:
+    # All paths → admin-panel service (React SPA served by Nginx)
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: admin-panel
+          port: 80

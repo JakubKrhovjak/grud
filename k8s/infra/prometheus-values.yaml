@@ -11,6 +11,9 @@ prometheus:
     retention: 7d
     # Enable remote write receiver for Tempo metrics-generator
     enableRemoteWriteReceiver: true
+    # Allow out-of-order samples from OTel (needed for remote_write from Alloy)
+    tsdb:
+      outOfOrderTimeWindow: 5m
     resources:
       limits:
         cpu: 500m

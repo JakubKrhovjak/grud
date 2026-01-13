@@ -136,9 +136,11 @@ gke/connect: ## Connect to GKE cluster via Connect Gateway
 	@echo "✅ Connected to $(GKE_CLUSTER) via Connect Gateway"
 
 gke/build: ## Build and push images to Artifact Registry
-	@echo "📦 Building and pushing images to Artifact Registry..."
-	@KO_DOCKER_REPO=$(GKE_REGISTRY)/student-service ko build --bare -t latest ./services/student-service/cmd/student-service
-	@KO_DOCKER_REPO=$(GKE_REGISTRY)/project-service ko build --bare -t latest ./services/project-service/cmd/project-service
+	@echo "📦 Building and pushing images to Artifact Registry (linux/amd64)..."
+	@KO_DOCKER_REPO=$(GKE_REGISTRY)/student-service ko build --bare -t latest --platform=linux/amd64 ./services/student-service/cmd/student-service
+	@KO_DOCKER_REPO=$(GKE_REGISTRY)/project-service ko build --bare -t latest --platform=linux/amd64 ./services/project-service/cmd/project-service
+	@echo "📦 Building admin-panel via Cloud Build (AMD64)..."
+	@gcloud builds submit services/admin --tag=$(GKE_REGISTRY)/admin-panel:latest --project=$(GCP_PROJECT) --quiet
 	@echo "✅ Images pushed to $(GKE_REGISTRY)"
 
 gke/deploy: gke/build  ## Deploy to GKE with Helm
@@ -151,11 +153,14 @@ gke/deploy: gke/build  ## Deploy to GKE with Helm
 		-f k8s/grud/values-gke.yaml \
 		--set studentService.image.repository=$(GKE_REGISTRY)/student-service \
 		--set projectService.image.repository=$(GKE_REGISTRY)/project-service \
+		--set adminPanel.image.repository=$(GKE_REGISTRY)/admin-panel \
 		--set cloudSql.privateIp=$$CLOUDSQL_IP \
 		--set secrets.gcp.projectId=$(GCP_PROJECT) \
 		--set secrets.gcp.clusterLocation=$(GCP_ZONE) \
 		--wait
 	@kubectl rollout restart deployment -n grud
+	@echo "🌐 Deploying Gateway API..."
+	@kubectl apply -f k8s/gateway/
 	@echo "✅ Deployed to GKE"
 
 gke/status: ## Show GKE cluster status
@@ -213,6 +218,25 @@ gke/full-deploy: ## Full GKE deployment (terraform + helm)
 	@$(MAKE) gke/deploy
 	@echo "✅ Full GKE deployment complete"
 
+gke/gateway: ## Deploy Gateway API resources
+	@echo "🌐 Deploying Gateway API..."
+	@kubectl apply -f k8s/gateway/
+	@echo "✅ Gateway deployed"
+	@echo ""
+	@echo "Check Gateway status:"
+	@echo "  kubectl get gateway -n grud"
+	@echo "  kubectl get httproute -A"
+
+gke/gateway-status: ## Show Gateway and HTTPRoute status
+	@echo "=== Gateway ==="
+	@kubectl get gateway -n grud -o wide
+	@echo ""
+	@echo "=== HTTPRoutes ==="
+	@kubectl get httproute -A
+	@echo ""
+	@echo "=== Gateway Details ==="
+	@kubectl describe gateway grud-gateway -n grud | tail -20
+
 # =============================================================================
 # Terraform
 # =============================================================================
@@ -229,20 +253,42 @@ tf/plan: ## Plan Terraform changes
 
 tf/apply: ## Apply Terraform configuration
 	@echo "🚀 Applying Terraform configuration..."
+	@echo "🔄 Importing protected resources if they exist..."
+	@cd $(TF_DIR) && terraform import google_dns_managed_zone.grudapp projects/$(GCP_PROJECT)/managedZones/grudapp-zone 2>/dev/null || true
+	@cd $(TF_DIR) && terraform import google_dns_record_set.root $(GCP_PROJECT)/grudapp-zone/grudapp.com./A 2>/dev/null || true
+	@cd $(TF_DIR) && terraform import google_dns_record_set.grafana $(GCP_PROJECT)/grudapp-zone/grafana.grudapp.com./A 2>/dev/null || true
+	@cd $(TF_DIR) && terraform import google_dns_record_set.admin $(GCP_PROJECT)/grudapp-zone/admin.grudapp.com./A 2>/dev/null || true
+	@cd $(TF_DIR) && terraform import google_compute_managed_ssl_certificate.grud projects/$(GCP_PROJECT)/global/sslCertificates/grud-cert 2>/dev/null || true
 	@cd $(TF_DIR) && terraform apply -auto-approve
 	@echo "✅ Terraform applied"
 
-tf/destroy: ## Destroy Terraform resources
+tf/destroy: ## Destroy Terraform resources (preserves DNS, Gateway certs, IPs)
 	@echo "🗑️  Destroying Terraform resources..."
+	@echo "🛡️  Removing protected resources from state..."
+	@echo "    - DNS zone and records"
+	@cd $(TF_DIR) && terraform state rm google_dns_managed_zone.grudapp 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_dns_record_set.root 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_dns_record_set.grafana 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_dns_record_set.admin 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_dns_record_set.cert_validation 2>/dev/null || true
+	@echo "    - Static IP"
+	@cd $(TF_DIR) && terraform state rm 'data.google_compute_global_address.ingress_ip' 2>/dev/null || true
+	@echo "    - Certificate Manager (Gateway API)"
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate_map.grud 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_dns_authorization.grudapp 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate.grud 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate_map_entry.root 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate_map_entry.wildcard 2>/dev/null || true
+	@echo "📝 Note: Old Ingress SSL cert (google_compute_managed_ssl_certificate.grud) WILL be deleted"
+	@echo "🚀 Running terraform destroy..."
 	@cd $(TF_DIR) && terraform destroy -auto-approve
 
 tf/output: ## Show Terraform outputs
 	@cd $(TF_DIR) && terraform output
 
 gke/ingress: ## Show Ingress status and external IP
-	@echo "=== Reserved Static IPs (Terraform) ==="
+	@echo "=== Shared Static IP (Terraform) ==="
 	@cd $(TF_DIR) && terraform output ingress_ip 2>/dev/null || echo "Not created yet"
-	@cd $(TF_DIR) && terraform output grafana_ip 2>/dev/null || echo "Not created yet"
 	@echo ""
 	@echo "=== App Ingress (grud namespace) ==="
 	@kubectl get ingress -n grud 2>/dev/null || echo "No ingress found"
@@ -251,15 +297,21 @@ gke/ingress: ## Show Ingress status and external IP
 	@kubectl get ingress -n infra 2>/dev/null || echo "No ingress found"
 	@echo ""
 	@echo "URLs (after deployment):"
-	@echo "  API:     http://$$(cd $(TF_DIR) && terraform output -raw ingress_ip 2>/dev/null)/api"
-	@echo "  Grafana: http://$$(cd $(TF_DIR) && terraform output -raw grafana_ip 2>/dev/null)"
+	@echo "  API:     https://grudapp.com/api"
+	@echo "  Grafana: https://grafana.grudapp.com"
 
 gcp/resources: ## List all GCP resources in project
 	@echo "=== GKE Clusters ==="
 	@gcloud container clusters list --project=$(GCP_PROJECT) 2>/dev/null || echo "None"
 	@echo ""
+	@echo "=== GKE Node Pools ==="
+	@gcloud container node-pools list --cluster=$(GKE_CLUSTER) --zone=$(GCP_ZONE) --project=$(GCP_PROJECT) 2>/dev/null || echo "None"
+	@echo ""
 	@echo "=== Cloud SQL Instances ==="
 	@gcloud sql instances list --project=$(GCP_PROJECT) 2>/dev/null || echo "None"
+	@echo ""
+	@echo "=== Cloud SQL Databases ==="
+	@gcloud sql databases list --instance=grud-postgres --project=$(GCP_PROJECT) 2>/dev/null || echo "None"
 	@echo ""
 	@echo "=== Compute Instances (VMs) ==="
 	@gcloud compute instances list --project=$(GCP_PROJECT) 2>/dev/null || echo "None"
