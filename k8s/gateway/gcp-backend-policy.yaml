@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 # Student Service Backend Policy
 # -----------------------------------------------------------------------------
-# Configures timeouts, connection draining, and logging for the main API.
+# Configures timeouts, connection draining, logging, and Cloud Armor for the main API.
 # No IAP - public API endpoints.
 apiVersion: networking.gke.io/v1
 kind: GCPBackendPolicy
@@ -30,6 +30,9 @@ metadata:
   namespace: grud
 spec:
   default:
+    # Cloud Armor WAF policy (created in terraform/cloud-armor.tf)
+    # Provides: rate limiting, SQL injection protection, XSS protection
+    securityPolicy: grud-security-policy
     # Request timeout - max time to wait for backend response
     timeoutSec: 30
     # Connection draining - graceful shutdown during rolling updates
