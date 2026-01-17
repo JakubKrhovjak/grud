@@ -1,164 +1,174 @@
 # Development Guide
 
-## Running Services Locally in GoLand/IntelliJ IDEA
+## Local Development Setup
 
-### Quick Setup
-
-Both services now support running from the project root directory. The config loading has been updated to search in the correct paths after the restructuring to `services/` directory.
-
-### Run Configuration Settings
-
-When creating a run configuration in GoLand:
-
-1. **Working Directory**: Set to project root
-   ```
-   /Users/jakubkrhovjak/GolandProjects/grud
-   ```
-
-2. **Package path** (for student-service):
-   ```
-   grud/services/student-service/cmd/student-service
-   ```
-
-3. **Package path** (for project-service):
-   ```
-   grud/services/project-service/cmd/project-service
-   ```
-
-4. **Environment Variables** (REQUIRED):
-   - `ENV=local` (required for config loading)
-   - `ENV=local` (required for local development, disables secure cookies)
-   - `JWT_SECRET=your-secret-key` (required for authentication)
-
-   Example for local development:
-   ```
-   ENV=local
-   ENV=local
-   JWT_SECRET=production-secret-change-this-in-real-deployment
-   ```
-
-### Important: Scale Down Kubernetes Services
-
-When running services locally in GoLand, you must scale down the corresponding Kubernetes deployments to avoid database connection conflicts:
+### Prerequisites
 
 ```bash
-# Scale down student-service in Kubernetes
-kubectl scale deployment student-service -n grud --replicas=0
-
-# Scale down project-service in Kubernetes (if testing project-service)
-kubectl scale deployment project-service -n grud --replicas=0
+brew install go docker kubectl helm kind
 ```
 
-After finishing local development, scale back up:
+### Running Services in GoLand/IntelliJ IDEA
+
+#### Run Configuration
+
+1. **Working Directory**: Project root (where `go.work` is located)
+
+2. **Package path**:
+   - student-service: `cloud-native-platform/services/student-service/cmd/student-service`
+   - project-service: `cloud-native-platform/services/project-service/cmd/project-service`
+
+3. **Environment Variables**:
+   ```
+   ENV=local
+   JWT_SECRET=dev-secret-key-change-in-production
+   ```
+
+### Database Setup
+
+#### Option 1: Docker Compose (Recommended)
 
 ```bash
-# Scale back up
+docker-compose up -d postgres postgres_projects
+```
+
+Databases:
+- Student DB: `localhost:5433`
+- Project DB: `localhost:5440`
+
+#### Option 2: Kind Kubernetes
+
+```bash
+make kind/setup
+make kind/deploy
+
+# Port forward databases
+kubectl port-forward -n grud svc/student-db 5433:5432 &
+kubectl port-forward -n grud svc/project-db 5440:5432 &
+```
+
+### Scale Down K8s When Running Locally
+
+When running services locally, scale down K8s deployments to avoid conflicts:
+
+```bash
+# Scale down
+kubectl scale deployment student-service -n grud --replicas=0
+kubectl scale deployment project-service -n grud --replicas=0
+
+# Scale back up when done
 kubectl scale deployment student-service -n grud --replicas=2
 kubectl scale deployment project-service -n grud --replicas=2
 ```
 
-### Database Setup
-
-For local development, you have two options:
-
-#### Option 1: Docker Compose (Recommended)
-```bash
-docker-compose up postgres postgres_projects
-```
-
-This will start:
-- Student database on `localhost:5439`
-- Project database on `localhost:5440`
-
-#### Option 2: Kind Kubernetes (Full Stack)
-```bash
-# Port forward the databases from Kubernetes
-kubectl port-forward -n grud svc/student-db 5432:5432
-kubectl port-forward -n grud svc/project-db 5440:5432
-```
-
-### Config Files Location
-
-Config files are located in:
-- `services/student-service/configs/config.local.yaml`
-- `services/project-service/configs/config.qa.yaml`
-
-The application automatically searches these paths:
-1. `./configs` (for Docker/K8s runtime)
-2. `./services/<service-name>/configs` (for IDE from root)
-3. `./services/<service-name>/configs` (legacy path support)
-4. `../configs` (for IDE from cmd/)
-5. `../../configs` (for other locations)
-
 ## Project Structure
 
 ```
-grud/
-├── services/                    # Microservices
+cloud-native-platform/
+├── services/
 │   ├── student-service/
-│   │   ├── cmd/student-service/  # Main entry point
-│   │   ├── internal/             # Internal packages
-│   │   └── configs/              # Service configs
-│   └── project-service/
-│       ├── cmd/project-service/
-│       ├── internal/
-│       └── configs/
-├── api/                        # Shared protobuf definitions
-├── common/                     # Shared utilities
-├── testing/                    # Shared test utilities
-└── k8s/                       # Kubernetes manifests
+│   │   ├── cmd/student-service/    # Entry point
+│   │   ├── internal/               # Business logic
+│   │   └── configs/                # YAML configs
+│   ├── project-service/
+│   │   ├── cmd/project-service/
+│   │   ├── internal/
+│   │   └── configs/
+│   └── admin/                      # React frontend
+├── common/                         # Shared Go packages
+├── api/                            # Protobuf definitions
+├── k8s/                            # Helm charts & manifests
+├── terraform/                      # GKE infrastructure
+└── testing/                        # Test utilities
 ```
+
+## Config Files
+
+Config files per environment:
+- `services/student-service/configs/config.local.yaml`
+- `services/project-service/configs/config.local.yaml`
+
+The application searches these paths:
+1. `/configs` (Kubernetes mount)
+2. `./services/<service>/configs` (IDE from root)
+3. `../configs` (IDE from cmd/)
 
 ## Testing
 
-Run all tests:
 ```bash
+# All tests
 make test
+
+# With coverage
+go test ./... -cover
+
+# Specific service
+cd services/student-service && go test ./...
 ```
 
-Run service-specific tests:
+## Building
+
 ```bash
-make test-student
-make test-project
+# Build all
+make build
+
+# Build specific service
+go build ./services/student-service/cmd/student-service
+
+# Build container images (Ko)
+export KO_DOCKER_REPO=kind.local
+ko build ./services/student-service/cmd/student-service
 ```
 
 ## Kubernetes Deployment
 
-Deploy to local Kind cluster:
+### Local (Kind)
+
 ```bash
-export KO_DOCKER_REPO=kind.local
-export KIND_CLUSTER_NAME=grud-cluster
-kustomize build k8s/overlays/dev | ko resolve -f - | kubectl apply -f -
+make kind/setup      # Create cluster
+make infra/deploy    # Deploy observability
+make kind/deploy     # Deploy services
+```
+
+### GKE
+
+```bash
+make gke/connect     # Connect to cluster
+make gke/deploy      # Build & deploy
 ```
 
 ## Troubleshooting
 
 ### Config file not found
-If you see `Config File "config.local" Not Found`, ensure:
-1. Working directory is set to project root in your IDE run configuration
-2. Config file exists at `services/<service-name>/configs/config.local.yaml`
-3. `ENV` is set correctly (defaults to `local`)
+
+```
+Config File "config.local" Not Found
+```
+
+Fix:
+1. Set working directory to project root
+2. Ensure `ENV=local` is set
+3. Check config file exists at `services/<service>/configs/config.local.yaml`
 
 ### Database connection refused
-Ensure database is running:
+
 ```bash
-# Check docker containers
+# Check Docker
 docker ps | grep postgres
 
-# Or check K8s pods
+# Check K8s
 kubectl get pods -n grud
 ```
 
 ### Port already in use
-Check if service is already running:
+
 ```bash
 lsof -i :8080  # student-service
-lsof -i :8081  # project-service
+lsof -i :9090  # project-service gRPC
 ```
 
-### Authentication not working (invalid credentials)
-If login always returns "invalid email or password":
-1. Ensure `JWT_SECRET` environment variable is set in your IDE run configuration
-2. Ensure `ENV=local` is set (disables secure-only cookies)
-3. Check that database contains users with hashed passwords
-4. Verify port-forward to database is active: `lsof -i :5432`
+### Authentication not working
+
+1. Ensure `JWT_SECRET` is set
+2. Ensure `ENV=local` (disables secure cookies)
+3. Check database has users with bcrypt hashed passwords

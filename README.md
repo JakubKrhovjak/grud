@@ -1,32 +1,37 @@
- # GRUD - University Management Platform
+# Cloud Native Platform
 
-Cloud-native microservices platform for university management with observability, distributed tracing, and real-time messaging.
+Cloud-native microservices platform demonstrating modern Go backend architecture with observability, security, and infrastructure as code.
 
-## Quick Start
+## Why These Technologies?
 
-### Local Development (Kind)
-```bash
-make kind/setup          # Create Kind cluster
-make infra/deploy        # Prometheus, Grafana, NATS, Loki, Tempo
-make kind/deploy         # Deploy all services
+### Backend Stack
 
-# Access services
-open http://localhost:8080    # Student Service API
-open http://localhost:9080    # Admin Panel
-open http://localhost:30300   # Grafana
-```
+| Technology | Why? |
+|------------|------|
+| **Go + Gin** | High-performance HTTP framework with minimal overhead. Gin provides fast routing, middleware support, JSON validation, and error handling out of the box. Battle-tested in production at scale. |
+| **Bun ORM** | Modern, fast SQL-first ORM for Go. Generates efficient queries, supports PostgreSQL natively, and provides type-safe database operations without the complexity of GORM. |
+| **PostgreSQL** | Battle-tested relational database. ACID compliance, JSON support, excellent performance. Cloud SQL provides managed HA with automatic backups. |
+| **JWT Authentication** | Stateless authentication using access + refresh tokens. HttpOnly cookies prevent XSS, bcrypt for password hashing, configurable expiration. |
+| **gRPC + Protocol Buffers** | Efficient inter-service communication with type safety. Smaller payloads and faster serialization than REST/JSON. |
+| **NATS** | Lightweight, high-performance messaging. Simpler than Kafka for event-driven architecture, perfect for real-time notifications. |
 
-### GKE Production
-```bash
-make tf/apply            # Deploy infrastructure
-make gke/connect         # Connect via Connect Gateway
-make infra/deploy-gke    # Deploy observability stack
-make gke/deploy          # Deploy application
+### Observability Stack
 
-# Access services
-open https://grudapp.com/api          # API
-open https://grafana.grudapp.com      # Grafana (IAP protected)
-```
+| Technology | Why? |
+|------------|------|
+| **OpenTelemetry** | Vendor-neutral observability standard. Single SDK for traces, metrics, and logs. Future-proof - switch backends without code changes. |
+| **Grafana** | Unified visualization for all telemetry data. Dashboards for metrics (Prometheus), logs (Loki), and traces (Tempo) in one place. |
+| **Prometheus** | Industry standard for metrics. Pull-based model works well with Kubernetes, extensive ecosystem of exporters and alerts. |
+| **Loki + Tempo** | Grafana-native log and trace storage. Cost-effective (log labels, not full-text indexing), seamless integration with Grafana dashboards. |
+
+### Infrastructure
+
+| Technology | Why? |
+|------------|------|
+| **Terraform** | Infrastructure as code for reproducible deployments. State management, dependency graph, extensive GCP provider support. |
+| **GKE + Gateway API** | Managed Kubernetes with Google's next-gen ingress. Native HTTPS, Cloud Armor integration, global load balancing. |
+| **Cloud Armor** | WAF and DDoS protection at the edge. Rate limiting, geo-blocking, OWASP rule sets - all managed by Google. |
+| **Workload Identity** | Secure GCP API access without service account keys. Pods authenticate using Kubernetes service accounts mapped to GCP IAM. |
 
 ## Architecture
 
@@ -59,10 +64,52 @@ open https://grafana.grudapp.com      # Grafana (IAP protected)
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          Security Layer                                     │
 │                                                                             │
-│  Connect Gateway ──► kubectl/Terraform (IAM auth, no IP whitelist)         │
-│  Cloud IAP ──► Grafana (Google authentication)                             │
+│  Cloud Armor ──► WAF + DDoS protection + Rate limiting                     │
 │  Gateway API ──► HTTPS with managed certificates                           │
+│  Cloud IAP ──► Grafana (Google authentication)                             │
+│  Connect Gateway ──► kubectl/Terraform (IAM auth, no IP whitelist)         │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Security Features
+
+| Feature | Description |
+|---------|-------------|
+| **Cloud Armor** | WAF with OWASP rules, DDoS protection, rate limiting, geo-blocking |
+| **JWT Authentication** | Stateless auth with access/refresh tokens, HttpOnly cookies, bcrypt passwords |
+| **Gateway API** | HTTPS with Google-managed SSL certificates |
+| **Cloud IAP** | Google authentication for Grafana (automated via Terraform) |
+| **Connect Gateway** | Secure cluster access without IP whitelisting |
+| **Private Nodes** | GKE nodes have no public IPs |
+| **Workload Identity** | Secure GCP API access without service account keys |
+| **Secret Manager** | Secrets stored in GSM, synced via External Secrets Operator |
+| **Database SSL** | Encrypted connections to Cloud SQL (sslmode=require) |
+
+## Quick Start
+
+### Local Development (Kind)
+```bash
+make kind/setup          # Create Kind cluster
+make infra/deploy        # Prometheus, Grafana, NATS, Loki, Tempo
+make kind/deploy         # Deploy all services
+
+# Access services
+open http://localhost:8080    # Student Service API
+open http://localhost:9080    # Admin Panel
+open http://localhost:30300   # Grafana
+```
+
+### GKE Production
+```bash
+make tf/apply            # Deploy infrastructure
+make gke/connect         # Connect via Connect Gateway
+make infra/deploy-gke    # Deploy observability stack
+make gke/deploy          # Deploy application
+
+# Access services
+open https://grudapp.com          # API
+open https://admin.grudapp.com    # Admin Panel
+open https://grafana.grudapp.com  # Grafana (IAP protected)
 ```
 
 ## Services
@@ -70,38 +117,141 @@ open https://grafana.grudapp.com      # Grafana (IAP protected)
 | Service | Port | Protocol | Description |
 |---------|------|----------|-------------|
 | **student-service** | 8080 | HTTP | Student management, JWT auth, NATS producer |
-| **project-service** | 8081/9090 | HTTP/gRPC | Project management, NATS consumer |
-| **admin** | 9080 | HTTP | React admin panel |
+| **project-service** | 50052 | gRPC | Project management, NATS consumer |
+| **admin** | 80 | HTTP | React admin panel |
 
-## Security Features
+## Authentication
 
-| Feature | Description |
-|---------|-------------|
-| **Connect Gateway** | Access cluster from anywhere without IP whitelisting |
-| **Cloud IAP** | Google authentication for Grafana (fully automated via Terraform) |
-| **Gateway API** | HTTPS with Google-managed SSL certificates |
-| **Private Nodes** | GKE nodes have no public IPs |
-| **Workload Identity** | Secure GCP API access without keys |
-| **Secret Manager** | Secrets stored in GSM, synced via External Secrets |
+### JWT Flow
 
-## Technologies
+```
+┌──────────┐     POST /auth/login      ┌──────────────────┐
+│  Client  │ ────────────────────────► │  student-service │
+│          │                           │                  │
+│          │ ◄──────────────────────── │  bcrypt verify   │
+│          │   Set-Cookie: refresh     │  generate JWT    │
+│          │   Body: { accessToken }   │                  │
+└──────────┘                           └──────────────────┘
 
-### Backend
-- Go 1.25, PostgreSQL 16, gRPC + Protocol Buffers
-- NATS (messaging), Bun ORM
-- OpenTelemetry (traces + metrics)
+┌──────────┐     GET /api/students     ┌──────────────────┐
+│  Client  │ ────────────────────────► │  student-service │
+│          │   Authorization: Bearer   │                  │
+│          │                           │  validate JWT    │
+│          │ ◄──────────────────────── │  extract claims  │
+│          │   { students: [...] }     │                  │
+└──────────┘                           └──────────────────┘
+```
 
-### Frontend
-- React 19, TypeScript, Material UI, Vite
+### Endpoints
 
-### Infrastructure
-- Kubernetes + Helm, Ko (container builder)
-- Kind (local) + CloudNativePG
-- GKE (production) + Cloud SQL + Terraform
-- Google Secret Manager + External Secrets Operator
+```bash
+# Register
+POST /auth/register
+{"firstName": "John", "lastName": "Doe", "email": "john@example.com", "password": "password123"}
 
-### Observability
-- Prometheus, Grafana, Loki, Tempo, Grafana Alloy
+# Login
+POST /auth/login
+{"email": "john@example.com", "password": "password123"}
+# Returns: { accessToken, refreshToken, student }
+
+# Refresh token
+POST /auth/refresh
+# Uses HttpOnly cookie, returns new accessToken
+
+# Logout
+POST /auth/logout
+# Invalidates refresh token
+```
+
+### Protected Routes
+
+All `/api/*` routes require valid JWT in Authorization header:
+```bash
+curl -H "Authorization: Bearer <token>" https://grudapp.com/api/students
+```
+
+## Cloud Armor
+
+Cloud Armor provides WAF and DDoS protection at the Google Cloud edge.
+
+### Features Enabled
+
+| Rule | Description |
+|------|-------------|
+| **OWASP Top 10** | SQL injection, XSS, LFI/RFI protection |
+| **Rate Limiting** | 100 requests/minute per IP |
+| **DDoS Protection** | Automatic mitigation at edge |
+
+### Configuration (Terraform)
+
+```hcl
+resource "google_compute_security_policy" "api_policy" {
+  name = "api-security-policy"
+
+  # Default allow
+  rule {
+    action   = "allow"
+    priority = "2147483647"
+    match {
+      versioned_expr = "SRC_IPS_V1"
+      config {
+        src_ip_ranges = ["*"]
+      }
+    }
+  }
+
+  # Rate limiting
+  rule {
+    action   = "rate_based_ban"
+    priority = "1000"
+    rate_limit_options {
+      conform_action = "allow"
+      exceed_action  = "deny(429)"
+      rate_limit_threshold {
+        count        = 100
+        interval_sec = 60
+      }
+    }
+  }
+
+  # OWASP SQL injection
+  rule {
+    action   = "deny(403)"
+    priority = "2000"
+    match {
+      expr {
+        expression = "evaluatePreconfiguredExpr('sqli-v33-stable')"
+      }
+    }
+  }
+}
+```
+
+## API Documentation
+
+### Students (requires JWT)
+
+```bash
+GET    /api/students          # List all
+GET    /api/students/{id}     # Get by ID
+POST   /api/students          # Create
+PUT    /api/students/{id}     # Update
+DELETE /api/students/{id}     # Delete
+```
+
+### Projects (via gRPC)
+
+```bash
+GET    /api/projects          # List all
+GET    /api/projects/{id}     # Get by ID
+POST   /api/projects          # Create
+```
+
+### Messages (NATS)
+
+```bash
+POST   /api/messages          # Send message via NATS
+```
 
 ## GKE Deployment
 
@@ -109,10 +259,6 @@ open https://grafana.grudapp.com      # Grafana (IAP protected)
 
 ```bash
 brew install google-cloud-sdk terraform kubectl helm ko
-
-# Add gke-gcloud-auth-plugin to PATH
-echo 'export PATH="/opt/homebrew/share/google-cloud-sdk/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
 ```
 
 ### Deploy
@@ -125,23 +271,15 @@ make gke/auth
 cd terraform
 cat > terraform.tfvars << EOF
 project_id = "your-project-id"
-infra_node_count = 3
-app_node_count = 1
-db_password_student = "initial"
-db_password_project = "initial"
 connect_gateway_users = ["user:your-email@gmail.com"]
 EOF
 
 # 3. Deploy infrastructure
 make tf/init && make tf/apply
 
-# 4. Connect to cluster (via Connect Gateway)
+# 4. Connect and deploy
 make gke/connect
-
-# 5. Deploy observability stack
 make infra/deploy-gke
-
-# 6. Deploy application
 make gke/deploy
 ```
 
@@ -149,144 +287,52 @@ make gke/deploy
 
 | Service | URL | Auth |
 |---------|-----|------|
-| API | https://grudapp.com/api | Public |
+| API | https://grudapp.com | Public (Cloud Armor protected) |
+| Admin | https://admin.grudapp.com | Public |
 | Grafana | https://grafana.grudapp.com | Google IAP |
 | kubectl | `make gke/connect` | Google IAM |
 
-See [terraform/README.md](terraform/README.md) for detailed guide.
-
-## Local Development (Kind)
-
-```bash
-# Create cluster
-make kind/setup
-
-# Deploy infrastructure
-make infra/deploy
-
-# Deploy application
-make kind/deploy
-
-# Check status
-make kind/status
-```
-
-### Access Services
-
-- Student Service API: http://localhost:8080
-- Project Service API: http://localhost:8081
-- Admin Panel: http://localhost:9080
-- Grafana: http://localhost:30300 (admin/admin)
-
 ## Makefile Commands
 
-### Build
 ```bash
-make build           # Build all services
-make test            # Run all tests
-make version         # Show version info
-```
+# Build & Test
+make build              # Build all services
+make test               # Run all tests
 
-### Kind Cluster
-```bash
-make kind/setup      # Create Kind cluster
-make kind/deploy     # Deploy with Helm
-make kind/status     # Show status
-make kind/cleanup    # Delete cluster
-```
+# Kind (Local)
+make kind/setup         # Create cluster
+make kind/deploy        # Deploy services
+make kind/cleanup       # Delete cluster
 
-### GKE Cluster
-```bash
-make gke/auth        # Authenticate with GCP
-make gke/connect     # Connect via Connect Gateway
-make gke/deploy      # Build and deploy
-make gke/status      # Show status
-```
+# GKE (Production)
+make gke/connect        # Connect via Connect Gateway
+make gke/deploy         # Build and deploy
+make gke/status         # Show status
 
-### Terraform
-```bash
-make tf/init         # Initialize
-make tf/plan         # Plan changes
-make tf/apply        # Apply
-make tf/destroy      # Destroy
-```
+# Terraform
+make tf/init            # Initialize
+make tf/apply           # Apply infrastructure
+make tf/destroy         # Destroy
 
-### Infrastructure
-```bash
+# Infrastructure
 make infra/deploy       # Deploy to Kind
 make infra/deploy-gke   # Deploy to GKE
-make infra/status       # Show status
-make infra/cleanup      # Remove
 ```
-
-## API Documentation
-
-### Authentication
-
-```bash
-POST /api/auth/login
-{
-  "email": "test@example.com",
-  "password": "password123"
-}
-```
-
-### Students (requires JWT)
-
-```bash
-GET    /api/students          # List all
-GET    /api/students/{id}     # Get by ID
-POST   /api/students          # Create
-PUT    /api/students/{id}     # Update
-DELETE /api/students/{id}     # Delete
-```
-
-### Projects
-
-```bash
-GET    /api/projects          # List all
-GET    /api/projects/{id}     # Get by ID
-POST   /api/projects          # Create
-```
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [terraform/README.md](terraform/README.md) | GKE infrastructure |
-| [k8s/infra/README.md](k8s/infra/README.md) | Observability stack |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Local development |
-| [TESTING.md](TESTING.md) | Testing guide |
-| [SECRETS.md](SECRETS.md) | Secret management |
-| [KUBERNETES.md](KUBERNETES.md) | Kubernetes deployment |
 
 ## Troubleshooting
 
 ### Connect Gateway not working
 
 ```bash
-# Check membership
 gcloud container fleet memberships list
-
-# Ensure gke-gcloud-auth-plugin is in PATH
 which gke-gcloud-auth-plugin
-export PATH="/opt/homebrew/share/google-cloud-sdk/bin:$PATH"
 ```
 
 ### Grafana IAP error
 
 ```bash
-# Check IAP secret (created by External Secrets)
 kubectl get secret -n infra grafana-iap-secret
-
-# Check ExternalSecret status
 kubectl describe externalsecret -n infra grafana-iap-secret
-
-# Check BackendConfig
-kubectl get backendconfig -n infra grafana-backend-config -o yaml
-
-# Verify credentials in Secret Manager
-gcloud secrets versions access latest --secret=grafana-iap-credentials
 ```
 
 ### Pods not starting
@@ -297,6 +343,13 @@ kubectl describe pod -n grud <pod-name>
 kubectl logs -n grud <pod-name>
 ```
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [terraform/README.md](terraform/README.md) | GKE infrastructure |
+| [k8s/infra/README.md](k8s/infra/README.md) | Observability stack |
+
 ## License
 
-This project is for educational purposes.
+Educational project demonstrating cloud-native architecture patterns.
