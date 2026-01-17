@@ -1,0 +1,163 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: grud-recording-rules
+  namespace: infra
+  labels:
+    prometheus: kube-prometheus-prometheus
+    role: recording-rules
+spec:
+  groups:
+    # ==================================================
+    # HTTP Metrics Aggregations (from OTel)
+    # ==================================================
+    - name: http_aggregations
+      interval: 15s
+      rules:
+        # Request rate per service (5min window)
+        - record: service:http_requests:rate5m
+          expr: |
+            sum(rate(http_server_duration_seconds_count[5m])) by (service_name)
+
+        # Request rate per service and route
+        - record: service_route:http_requests:rate5m
+          expr: |
+            sum(rate(http_server_duration_seconds_count[5m]))
+            by (service_name, http_route)
+
+        # Error rate per service (5xx responses)
+        - record: service:http_errors:rate5m
+          expr: |
+            sum(rate(http_server_duration_seconds_count{http_status_code=~"5.."}[5m]))
+            by (service_name)
+
+        # Error ratio per service (errors / total requests)
+        - record: service:http_errors:ratio5m
+          expr: |
+            sum(rate(http_server_duration_seconds_count{http_status_code=~"5.."}[5m])) by (service_name)
+            /
+            sum(rate(http_server_duration_seconds_count[5m])) by (service_name)
+
+        # P50 latency per service
+        - record: service:http_duration:p50_5m
+          expr: |
+            histogram_quantile(0.50,
+              sum(rate(http_server_duration_seconds_bucket[5m]))
+              by (service_name, le)
+            )
+
+        # P95 latency per service
+        - record: service:http_duration:p95_5m
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_server_duration_seconds_bucket[5m]))
+              by (service_name, le)
+            )
+
+        # P99 latency per service
+        - record: service:http_duration:p99_5m
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_server_duration_seconds_bucket[5m]))
+              by (service_name, le)
+            )
+
+    # ==================================================
+    # gRPC Metrics Aggregations (from OTel)
+    # ==================================================
+    - name: grpc_aggregations
+      interval: 15s
+      rules:
+        # RPC request rate per service
+        - record: service:grpc_requests:rate5m
+          expr: |
+            sum(rate(rpc_server_duration_seconds_count[5m])) by (service_name)
+
+        # RPC error rate per service
+        - record: service:grpc_errors:rate5m
+          expr: |
+            sum(rate(rpc_server_duration_seconds_count{rpc_grpc_status_code!="0"}[5m]))
+            by (service_name)
+
+        # RPC error ratio
+        - record: service:grpc_errors:ratio5m
+          expr: |
+            sum(rate(rpc_server_duration_seconds_count{rpc_grpc_status_code!="0"}[5m])) by (service_name)
+            /
+            sum(rate(rpc_server_duration_seconds_count[5m])) by (service_name)
+
+        # P99 gRPC latency
+        - record: service:grpc_duration:p99_5m
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(rpc_server_duration_seconds_bucket[5m]))
+              by (service_name, le)
+            )
+
+    # ==================================================
+    # Application Metrics (Custom Counters)
+    # ==================================================
+    - name: app_aggregations
+      interval: 30s
+      rules:
+        # Student registration rate
+        - record: service:students_registered:rate5m
+          expr: |
+            sum(rate(student_service_students_registered_total[5m]))
+            by (service_name)
+
+        # Message send rate
+        - record: service:messages_sent:rate5m
+          expr: |
+            sum(rate(student_service_messages_sent_total[5m]))
+            by (service_name)
+
+        # Student views rate
+        - record: service:students_viewed:rate5m
+          expr: |
+            sum(rate(student_service_students_viewed_total[5m]))
+            by (service_name)
+
+    # ==================================================
+    # Database Metrics (from common/metrics)
+    # ==================================================
+    - name: db_aggregations
+      interval: 15s
+      rules:
+        # DB connection pool usage per service
+        - record: service:db_connections:usage_ratio
+          expr: |
+            (
+              sum(go_sql_stats_connections_in_use) by (service_name)
+              /
+              sum(go_sql_stats_connections_max_open) by (service_name)
+            )
+
+        # DB query rate per service
+        - record: service:db_queries:rate5m
+          expr: |
+            sum(rate(go_sql_stats_queries_total[5m])) by (service_name)
+
+    # ==================================================
+    # SLI Metrics (for SLO calculations)
+    # ==================================================
+    - name: sli_aggregations
+      interval: 30s
+      rules:
+        # Availability SLI (% of successful requests)
+        - record: service:availability:sli
+          expr: |
+            1 - (
+              sum(rate(http_server_duration_seconds_count{http_status_code=~"5.."}[5m])) by (service_name)
+              /
+              sum(rate(http_server_duration_seconds_count[5m])) by (service_name)
+            )
+
+        # Latency SLI (% of requests under 500ms)
+        - record: service:latency:sli
+          expr: |
+            (
+              sum(rate(http_server_duration_seconds_bucket{le="0.5"}[5m])) by (service_name)
+              /
+              sum(rate(http_server_duration_seconds_count[5m])) by (service_name)
+            )

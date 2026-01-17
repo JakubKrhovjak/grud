@@ -63,6 +63,26 @@ alloy:
 
       prometheus.relabel "add_labels" {
         forward_to = [prometheus.remote_write.prometheus.receiver]
+
+        // Drop high-cardinality resource attributes to reduce cardinality
+        rule {
+          regex  = "service_instance_id"
+          action = "labeldrop"
+        }
+        rule {
+          regex  = "host_name"
+          action = "labeldrop"
+        }
+        rule {
+          regex  = "process_pid"
+          action = "labeldrop"
+        }
+        rule {
+          regex  = "process_executable_.*"
+          action = "labeldrop"
+        }
+
+        // Add cluster label for multi-cluster monitoring
         rule {
           target_label = "cluster"
           replacement  = "grud-cluster"

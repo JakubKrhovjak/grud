@@ -149,6 +149,9 @@ func createResource(ctx context.Context, serviceName, serviceVersion string) (*r
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(serviceVersion),
 		),
+		// Disable automatic resource detection to avoid high-cardinality attributes
+		// such as service.instance.id, host.name, process.pid
+		resource.WithDetectors(),
 	)
 }
 

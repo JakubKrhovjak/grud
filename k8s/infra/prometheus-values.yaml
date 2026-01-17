@@ -9,6 +9,12 @@ defaultRules:
 prometheus:
   prometheusSpec:
     retention: 7d
+
+    # Global scrape settings (applies to all scrape targets)
+    scrapeInterval: 30s       # How often to scrape targets (default: 1m)
+    scrapeTimeout: 10s        # Timeout for scrape requests (default: 10s)
+    evaluationInterval: 30s   # How often to evaluate alert rules (default: 1m)
+
     # Enable remote write receiver for Tempo metrics-generator
     enableRemoteWriteReceiver: true
     # Allow out-of-order samples from OTel (needed for remote_write from Alloy)
