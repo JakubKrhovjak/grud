@@ -1,341 +1,238 @@
 # Kubernetes Deployment
 
-Deploy GRUD microservices using **Kustomize + Ko** - declarative, GitOps-friendly approach.
+Deploy Cloud Native Platform using **Helm** for local Kind and GKE production environments.
 
 ## Quick Start
 
-```bash
-cd k8s
-
-# Complete setup
-make all
-
-# Or step by step:
-make setup              # Create Kind cluster
-make install-operator   # Install CloudNativePG
-make deploy             # Deploy with Kustomize + Ko
-make status             # Check deployment
-```
-
-**Access services:**
-- Student Service: http://localhost:8080/api/students
-- Project Service: http://localhost:8081/api/projects
-
-## Why Kustomize?
-
-✅ **Declarative** - GitOps-friendly, version controlled
-✅ **No scripts** - Pure Kubernetes manifests
-✅ **Overlays** - Easy dev/staging/prod configs
-✅ **Ko integration** - Build Go apps without Docker
-✅ **Idempotent** - Apply multiple times safely
-
-## Architecture
-
-```
-grud-cluster (Kind)
-├── control-plane (1 node)
-├── app node (workload=app) - Applications
-│   ├── student-service (2 replicas)
-│   └── project-service (2 replicas)
-├── infra node (workload=infra) - Reserved for monitoring
-└── db node (workload=db) - Databases
-    ├── student-db (3 PostgreSQL pods)
-    └── project-db (3 PostgreSQL pods)
-```
-
-## Deployment Methods
-
-### Method 1: Makefile (Recommended)
+### Local (Kind)
 
 ```bash
-# Complete setup
-make all                 # Cluster + operator + deploy + wait
-
-# Development (1 replica)
-make deploy-dev
-
-# Production (3 replicas)
-make deploy-prod
-
-# Check status
-make status
-
-# View logs
-make logs
-make logs-student
-make logs-project
-
-# Cleanup
-make cleanup
+make kind/setup      # Create Kind cluster
+make infra/deploy    # Deploy observability stack
+make kind/deploy     # Deploy services
 ```
 
-### Method 2: Ko + Kustomize (Direct)
+**Access:**
+- Student Service: http://localhost:8080
+- Admin Panel: http://localhost:30082
+- Grafana: http://localhost:30300 (admin/admin)
+
+### GKE Production
 
 ```bash
-# Set environment
-export KO_DOCKER_REPO=kind.local
-export KIND_CLUSTER_NAME=grud-cluster
-
-# Deploy everything
-ko resolve -f . | kubectl apply -f -
-
-# With overlays
-ko resolve -f overlays/dev/ | kubectl apply -f -
-ko resolve -f overlays/prod/ | kubectl apply -f -
+make tf/apply           # Deploy infrastructure via Terraform
+make gke/connect        # Connect via Connect Gateway
+make infra/deploy-gke   # Deploy observability
+make gke/deploy         # Build & deploy services
 ```
 
-### Method 3: Pure Kustomize
-
-If you already have Docker images:
-
-```bash
-kubectl apply -k .
-kubectl apply -k overlays/dev/
-kubectl apply -k overlays/prod/
-```
+**Access:**
+- API: https://grudapp.com
+- Admin: https://admin.grudapp.com
+- Grafana: https://grafana.grudapp.com (IAP protected)
 
 ## Structure
 
 ```
 k8s/
-├── Makefile                    # Deployment automation
-├── kustomization.yaml          # Base configuration
-├── namespace.yaml
+├── grud/                       # Helm chart for services
+│   ├── Chart.yaml
+│   ├── values.yaml             # Kind defaults
+│   ├── values-gke.yaml         # GKE overrides
+│   └── templates/
+│       ├── student-service.yaml
+│       ├── project-service.yaml
+│       ├── admin-panel.yaml
+│       ├── student-db.yaml
+│       ├── project-db.yaml
+│       └── external-secrets.yaml
 │
-├── student-service/
-│   ├── configmap.yaml
-│   ├── deployment.yaml         # Ko image: ko://student-service/cmd/student-service
-│   └── service.yaml
+├── infra/                      # Observability stack
+│   ├── prometheus/
+│   ├── grafana/
+│   ├── loki/
+│   ├── tempo/
+│   ├── alloy/
+│   └── nats/
 │
-├── project-service/
-│   ├── configmap.yaml
-│   ├── deployment.yaml         # Ko image: ko://project-service/cmd/project-service
-│   └── service.yaml
-│
-├── postgres/
-│   ├── secrets.yaml
-│   ├── student-db.yaml         # CloudNativePG cluster
-│   └── project-db.yaml         # CloudNativePG cluster
-│
-└── overlays/
-    ├── dev/                    # 1 replica, 1 DB instance
-    └── prod/                   # 3 replicas, 3 DB instances
+└── gateway/                    # GKE Gateway API
+    ├── gateway.yaml
+    ├── routes.yaml
+    └── backend-policies.yaml
 ```
 
-## How It Works
+## Helm Chart
 
-### Ko + Kustomize Integration
+### Values
 
-Ko resolves `image: ko://...` references:
+| Environment | File | Description |
+|-------------|------|-------------|
+| Kind | `values.yaml` | Local development, NodePort, local DBs |
+| GKE | `values-gke.yaml` | Production, Cloud SQL, HPA, External Secrets |
+
+### Key Differences
+
+| Feature | Kind | GKE |
+|---------|------|-----|
+| Database | CloudNativePG pods | Cloud SQL (managed) |
+| Secrets | Kubernetes Secrets | Google Secret Manager |
+| Ingress | NodePort | Gateway API + Cloud Armor |
+| SSL | None | Google-managed certificates |
+| Replicas | 1 | 2+ with HPA |
+
+### Deploy Commands
+
+```bash
+# Kind
+helm upgrade --install grud k8s/grud -n grud --create-namespace
+
+# GKE
+helm upgrade --install grud k8s/grud \
+  -n grud --create-namespace \
+  -f k8s/grud/values-gke.yaml \
+  --set cloudSql.privateIp=$CLOUDSQL_IP \
+  --set secrets.gcp.projectId=$PROJECT_ID
+```
+
+## Observability Stack
+
+### Components
+
+| Component | Purpose | Port |
+|-----------|---------|------|
+| Prometheus | Metrics collection | 9090 |
+| Grafana | Visualization | 3000 |
+| Loki | Log aggregation | 3100 |
+| Tempo | Distributed tracing | 4317 |
+| Alloy | OTLP collector | 4317 |
+| NATS | Messaging | 4222 |
+
+### Deploy
+
+```bash
+# Kind
+make infra/deploy
+
+# GKE
+make infra/deploy-gke
+```
+
+## Gateway API (GKE)
+
+Gateway API provides advanced traffic management:
 
 ```yaml
-# In deployment.yaml
-image: ko://student-service/cmd/student-service
-
-# Ko builds and replaces with
-image: kind.local/student-service-abc123@sha256:xyz...
+# gateway.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: grud-gateway
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  listeners:
+    - name: https
+      port: 443
+      protocol: HTTPS
 ```
 
-**Workflow:**
-1. `ko resolve` scans manifests
-2. Builds Go binaries (CGO_ENABLED=0)
-3. Creates images (Chainguard base)
-4. Pushes to Kind registry
-5. Replaces `ko://` with real image
-6. Outputs YAML for kubectl
+### Routes
 
-### Kustomize Overlays
+| Host | Backend |
+|------|---------|
+| grudapp.com | student-service |
+| admin.grudapp.com | admin-panel |
+| grafana.grudapp.com | grafana (IAP) |
 
-Base configuration + environment patches:
+### Security Policies
 
-**Development:**
-- 1 replica per service
-- 1 DB instance per cluster
-- Lower resource limits
+- **Cloud Armor**: WAF, DDoS, rate limiting
+- **Cloud IAP**: Google authentication for Grafana
+- **SSL**: Google-managed certificates
 
-**Production:**
-- 3 replicas per service
-- 3 DB instances per cluster
-- Higher resource limits
+## Node Affinity
 
-## Development Workflow
+Workloads are scheduled on dedicated nodes:
 
-```bash
-# After code changes
-make deploy              # Rebuild and redeploy
+| Node Type | Workloads |
+|-----------|-----------|
+| `app` | student-service, project-service, admin |
+| `infra` | Prometheus, Grafana, Loki, Tempo |
+| `db` | PostgreSQL (Kind only) |
 
-# Or specific service
-ko apply -f student-service/deployment.yaml
-```
-
-Ko automatically:
-- ✅ Detects code changes
-- ✅ Rebuilds binary
-- ✅ Creates new image
-- ✅ Triggers rolling update
-
-## Makefile Commands
-
-```bash
-make help              # Show all commands
-
-# Setup
-make setup             # Create Kind cluster
-make install-operator  # Install CloudNativePG
-
-# Deployment
-make deploy            # Base config (2 replicas)
-make deploy-dev        # Dev overlay (1 replica)
-make deploy-prod       # Prod overlay (3 replicas)
-
-# Monitoring
-make status            # Show cluster status
-make logs              # All service logs
-make test              # Test services
-
-# Utilities
-make wait              # Wait for resources
-make cleanup           # Delete cluster
-
-# Complete workflows
-make all               # Setup + deploy + wait
-make dev               # Setup + dev deploy
-make prod              # Setup + prod deploy
-```
-
-## Testing
-
-```bash
-# Automated
-make test
-
-# Manual
-curl http://localhost:8080/api/students
-curl http://localhost:8081/api/projects
-
-# Create student
-curl -X POST http://localhost:8080/api/students \
-  -H "Content-Type: application/json" \
-  -d '{"firstName":"John","lastName":"Doe","email":"john@test.com","major":"CS","year":2}'
-
-# Create project
-curl -X POST http://localhost:8081/api/projects \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Test","description":"Testing"}'
+```yaml
+nodeSelector:
+  node-type: app
+tolerations:
+  - key: workload
+    value: app
+    effect: NoSchedule
 ```
 
 ## Monitoring
 
 ```bash
+# Pod status
+kubectl get pods -n grud
+kubectl get pods -n infra
+
 # Logs
-make logs              # All services
-make logs-student      # Student only
-make logs-project      # Project only
-make logs-db           # Databases
+kubectl logs -n grud deployment/student-service
+kubectl logs -n infra deployment/grafana
 
 # Resources
-kubectl top nodes
 kubectl top pods -n grud
-
-# Status
-make status
-kubectl get all -n grud
-kubectl get clusters -n grud
-```
-
-## Database Access
-
-```bash
-# Connect to database
-kubectl exec -it -n grud student-db-1 -- psql -U app university
-kubectl exec -it -n grud project-db-1 -- psql -U app projects
-
-# Port-forward
-kubectl port-forward -n grud svc/student-db-rw 5432:5432
-psql -h localhost -U app -d university
 ```
 
 ## Troubleshooting
 
+### Pods not starting
+
 ```bash
-# Check status
-make status
-
-# Describe pod
 kubectl describe pod -n grud <pod-name>
-
-# Check databases
-kubectl get clusters -n grud
-
-# Ko build test
-ko build --local ./student-service/cmd/student-service
+kubectl logs -n grud <pod-name>
 ```
 
-## Scripts vs Kustomize
+### Database connection issues
 
-**Scripts ONLY for:**
-- ✅ `kind-setup.sh` - Create cluster
-- ✅ `install-cnpg.sh` - Install operator
-- ✅ `cleanup.sh` - Delete cluster
+```bash
+# Check Cloud SQL connectivity (GKE)
+kubectl exec -it -n grud deployment/student-service -- nc -zv $CLOUDSQL_IP 5432
 
-**Kustomize for:**
-- ✅ All deployments
-- ✅ Configuration management
-- ✅ Environment overlays
-
-**Why?**
-- ❌ Scripts are imperative
-- ❌ Not GitOps-friendly
-- ✅ Kustomize is declarative
-- ✅ Idempotent
-- ✅ Perfect for GitOps
-
-## GitOps Ready
-
-```yaml
-# ArgoCD Application
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: grud
-spec:
-  source:
-    repoURL: https://github.com/your-org/grud
-    path: k8s/overlays/prod
-    plugin:
-      name: ko
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: grud
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+# Check local DB (Kind)
+kubectl get pods -n grud -l app=student-db
 ```
 
-## Best Practices
+### External Secrets not syncing
 
-✅ **Declarative Infrastructure** - Everything in YAML
-✅ **Ko Build** - No Docker needed
-✅ **Kustomize Overlays** - Environment management
-✅ **Node Affinity** - Workload placement
-✅ **High Availability** - Multiple replicas
-✅ **Security** - Non-root containers
-✅ **Resource Limits** - CPU/memory management
-✅ **Health Probes** - Liveness/readiness checks
+```bash
+kubectl get externalsecret -n grud
+kubectl describe externalsecret -n grud student-db-secret
+```
 
-## Full Documentation
+### Gateway not routing
 
-See [KUBERNETES.md](../KUBERNETES.md) for complete documentation including:
-- Detailed architecture
-- Advanced configuration
-- Production considerations
-- Troubleshooting guide
-- GitOps integration
+```bash
+kubectl get gateway -n grud
+kubectl get httproute -n grud
+kubectl describe gateway grud-gateway -n grud
+```
 
-## References
+## Makefile Commands
 
-- [Kustomize Docs](https://kustomize.io/)
-- [Ko Docs](https://ko.build/)
-- [CloudNativePG](https://cloudnative-pg.io/)
-- [Kind Docs](https://kind.sigs.k8s.io/)
+```bash
+# Kind
+make kind/setup      # Create cluster
+make kind/deploy     # Deploy services
+make kind/status     # Show status
+make kind/cleanup    # Delete cluster
+
+# GKE
+make gke/connect     # Connect to cluster
+make gke/deploy      # Build & deploy
+make gke/status      # Show status
+
+# Infrastructure
+make infra/deploy       # Deploy to Kind
+make infra/deploy-gke   # Deploy to GKE
+make infra/status       # Show status
+```
