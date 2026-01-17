@@ -1,6 +1,8 @@
 # Cloud Native Platform
 
-Cloud-native microservices platform demonstrating modern Go backend architecture with observability, security, and infrastructure as code.
+**Showcase project** demonstrating production-ready infrastructure for a mid-sized company (10-50 engineers, multiple teams).
+
+This is intentionally "enterprise-grade" - the goal was to build a reference architecture that handles real-world concerns: observability, security, CI/CD, infrastructure as code, and operational excellence. Not every project needs this complexity, but when you do, this is how it's done.
 
 ## Why These Technologies?
 
@@ -32,6 +34,35 @@ Cloud-native microservices platform demonstrating modern Go backend architecture
 | **GKE + Gateway API** | Managed Kubernetes with Google's next-gen ingress. Native HTTPS, Cloud Armor integration, global load balancing. |
 | **Cloud Armor** | WAF and DDoS protection at the edge. Rate limiting, geo-blocking, OWASP rule sets - all managed by Google. |
 | **Workload Identity** | Secure GCP API access without service account keys. Pods authenticate using Kubernetes service accounts mapped to GCP IAM. |
+
+## When NOT to Use This Architecture
+
+This is a **showcase for mid-sized companies** (10-50 engineers). It's **overkill** if:
+
+| Scenario | Better Alternative |
+|----------|-------------------|
+| **MVP / Prototype** | Single Go binary + SQLite, deploy to Cloud Run |
+| **< 1000 DAU** | Monolith on a single VM, PostgreSQL on the same box |
+| **Solo developer** | Skip Kubernetes, use Cloud Run or Railway |
+| **No ops team** | Use managed PaaS (Render, Fly.io, Heroku) |
+| **Budget < $100/mo** | Single container, managed database |
+| **Simple CRUD app** | Skip microservices, gRPC, and message queues |
+
+**Signs you DON'T need this:**
+- You can count your services on one hand
+- Your team doesn't have dedicated DevOps/SRE
+- You're not hitting scaling limits with a monolith
+- You don't need independent deployment of services
+- "Because microservices" is your only reason
+
+**This architecture makes sense when:**
+- Multiple teams need to deploy independently
+- Different services have different scaling requirements
+- You need fault isolation between components
+- You have dedicated platform/infrastructure engineers
+- Monthly cloud spend justifies the operational complexity
+
+> **For most projects, Cloud Run + Cloud SQL is the right answer.** This architecture is for when you've outgrown that.
 
 ## Architecture
 
