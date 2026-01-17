@@ -32,6 +32,12 @@ data:
     env: {{ .Values.studentService.config.env }}
     server:
       port: {{ .Values.studentService.config.serverPort | quote }}
+      {{- if .Values.studentService.config.corsOrigins }}
+      cors_origins:
+        {{- range .Values.studentService.config.corsOrigins }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- end }}
     database:
       {{- if .Values.cloudSql.enabled }}
       host: {{ .Values.cloudSql.privateIp | quote }}
@@ -40,6 +46,7 @@ data:
       {{- end }}
       port: {{ .Values.studentService.database.port | quote }}
       name: {{ .Values.studentService.database.name }}
+      ssl_mode: {{ .Values.studentService.database.sslMode | default "disable" }}
     project_service:
       grpc: {{ .Values.studentService.config.grpcEndpoint }}
     nats:

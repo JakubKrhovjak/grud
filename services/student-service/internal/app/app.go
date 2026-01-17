@@ -107,8 +107,10 @@ func New() *App {
 		}
 	}
 
-	// Apply CORS middleware globally
-	app.router.Use(middleware.CORS())
+	// Apply CORS middleware globally (origins from config)
+	if len(cfg.Server.CORSOrigins) > 0 {
+		app.router.Use(middleware.CORS(cfg.Server.CORSOrigins))
+	}
 
 	// Apply OTel HTTP instrumentation middleware (if available)
 	if telem != nil {

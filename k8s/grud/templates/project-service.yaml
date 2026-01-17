@@ -37,6 +37,7 @@ data:
       {{- end }}
       port: {{ .Values.projectService.database.port | quote }}
       name: {{ .Values.projectService.database.name }}
+      ssl_mode: {{ .Values.projectService.database.sslMode | default "disable" }}
     grpc:
       port: {{ .Values.projectService.config.grpcPort | quote }}
     nats:

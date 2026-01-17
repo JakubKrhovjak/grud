@@ -51,10 +51,14 @@ studentService:
     natsUrl: "nats.infra.svc.cluster.local:4222"
     natsSubject: "student-messages"
     otelEndpoint: "alloy.infra.svc.cluster.local:4317"
+    corsOrigins:
+      - "http://localhost:5173"
+      - "http://localhost:3000"
   database:
     host: student-db.grud.svc.cluster.local
     port: "5432"
     name: university
+    sslMode: disable
     secretName: student-db-app
   auth:
     jwtSecret: "super-secret-jwt-key-change-in-production"
@@ -99,6 +103,7 @@ projectService:
     host: project-db.grud.svc.cluster.local
     port: "5432"
     name: projects
+    sslMode: disable
     secretName: project-db-app
   serviceAccount:
     gcpServiceAccount: ""  # Set in values-gke.yaml

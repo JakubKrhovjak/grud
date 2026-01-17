@@ -6,6 +6,9 @@ server:
   read_timeout_seconds: 30
   write_timeout_seconds: 30
   idle_timeout_seconds: 120
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
 
 database:
   host: localhost
@@ -13,6 +16,7 @@ database:
   user: app
   password: changeme123
   name: university
+  ssl_mode: disable
   max_open_conns: 25
   max_idle_conns: 10
   conn_max_lifetime_seconds: 300

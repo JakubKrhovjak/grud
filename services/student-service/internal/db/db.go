@@ -16,13 +16,19 @@ import (
 )
 
 func New(cfg config.DatabaseConfig) *bun.DB {
+	sslMode := cfg.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		cfg.User,
 		cfg.Password,
 		cfg.Host,
 		cfg.Port,
 		cfg.DBName,
+		sslMode,
 	)
 
 	db := NewWithDSN(dsn)
