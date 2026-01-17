@@ -7,6 +7,11 @@ database:
   user: postgres
   password: postgres
   name: projects
+  ssl_mode: disable
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime_seconds: 300
+  conn_max_idle_time_seconds: 60
 
 grpc:
   port: "9090"

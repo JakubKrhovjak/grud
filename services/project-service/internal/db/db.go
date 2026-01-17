@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"time"
 
 	"project-service/internal/config"
 
@@ -15,16 +16,24 @@ import (
 )
 
 func New(cfg config.DatabaseConfig) *bun.DB {
+	sslMode := cfg.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		cfg.User,
 		cfg.Password,
 		cfg.Host,
 		cfg.Port,
 		cfg.Name,
+		sslMode,
 	)
 
-	return NewWithDSN(dsn)
+	db := NewWithDSN(dsn)
+	configurePool(db, cfg)
+	return db
 }
 
 func NewWithDSN(dsn string) *bun.DB {
@@ -37,6 +46,41 @@ func NewWithDSN(dsn string) *bun.DB {
 
 	slog.Info("database connected successfully")
 	return db
+}
+
+func configurePool(db *bun.DB, cfg config.DatabaseConfig) {
+	sqlDB := db.DB
+
+	maxOpen := cfg.MaxOpenConns
+	if maxOpen == 0 {
+		maxOpen = 25
+	}
+	sqlDB.SetMaxOpenConns(maxOpen)
+
+	maxIdle := cfg.MaxIdleConns
+	if maxIdle == 0 {
+		maxIdle = 10
+	}
+	sqlDB.SetMaxIdleConns(maxIdle)
+
+	connMaxLifetime := cfg.ConnMaxLifetime
+	if connMaxLifetime == 0 {
+		connMaxLifetime = 300
+	}
+	sqlDB.SetConnMaxLifetime(time.Duration(connMaxLifetime) * time.Second)
+
+	connMaxIdleTime := cfg.ConnMaxIdleTime
+	if connMaxIdleTime == 0 {
+		connMaxIdleTime = 60
+	}
+	sqlDB.SetConnMaxIdleTime(time.Duration(connMaxIdleTime) * time.Second)
+
+	slog.Info("database pool configured",
+		"max_open_conns", maxOpen,
+		"max_idle_conns", maxIdle,
+		"conn_max_lifetime_seconds", connMaxLifetime,
+		"conn_max_idle_time_seconds", connMaxIdleTime,
+	)
 }
 
 func RunMigrations(ctx context.Context, db *bun.DB, models ...interface{}) error {

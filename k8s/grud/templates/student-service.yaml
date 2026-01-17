@@ -32,6 +32,12 @@ data:
     env: {{ .Values.studentService.config.env }}
     server:
       port: {{ .Values.studentService.config.serverPort | quote }}
+      {{- if .Values.studentService.config.corsOrigins }}
+      cors_origins:
+        {{- range .Values.studentService.config.corsOrigins }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- end }}
     database:
       {{- if .Values.cloudSql.enabled }}
       host: {{ .Values.cloudSql.privateIp | quote }}
@@ -40,6 +46,7 @@ data:
       {{- end }}
       port: {{ .Values.studentService.database.port | quote }}
       name: {{ .Values.studentService.database.name }}
+      ssl_mode: {{ .Values.studentService.database.sslMode | default "disable" }}
     project_service:
       grpc: {{ .Values.studentService.config.grpcEndpoint }}
     nats:
@@ -134,6 +141,22 @@ spec:
                   key: jwt-secret
           resources:
             {{- toYaml .Values.studentService.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
           volumeMounts:
             - name: config
               mountPath: /configs

@@ -23,7 +23,7 @@ import (
 	"grud/common/metrics"
 	"grud/common/telemetry"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -31,7 +31,7 @@ import (
 
 type App struct {
 	config         *config.Config
-	router         chi.Router
+	router         *gin.Engine
 	server         *http.Server
 	logger         *slog.Logger
 	telemetry      *telemetry.Telemetry
@@ -64,9 +64,13 @@ func New() *App {
 	ctx := context.Background()
 	telem, _ := telemetry.Init(ctx, ServiceName, Version, cfg.Env, log)
 
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	router.Use(gin.Recovery())
+
 	app := &App{
 		config:    cfg,
-		router:    chi.NewRouter(),
+		router:    router,
 		logger:    log,
 		telemetry: telem,
 	}
@@ -103,13 +107,18 @@ func New() *App {
 		}
 	}
 
-	// Apply CORS middleware globally
-	app.router.Use(middleware.CORS)
+	// Apply CORS middleware globally (origins from config)
+	if len(cfg.Server.CORSOrigins) > 0 {
+		app.router.Use(middleware.CORS(cfg.Server.CORSOrigins))
+	}
 
 	// Apply OTel HTTP instrumentation middleware (if available)
 	if telem != nil {
-		app.router.Use(func(next http.Handler) http.Handler {
-			return otelhttp.NewHandler(next, ServiceName)
+		app.router.Use(func(c *gin.Context) {
+			handler := otelhttp.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				c.Next()
+			}), ServiceName)
+			handler.ServeHTTP(c.Writer, c.Request)
 		})
 	}
 
@@ -151,18 +160,17 @@ func New() *App {
 	app.natsProducer = natsProducer
 
 	// Create protected routes group for /api endpoints
-	app.router.Route("/api", func(r chi.Router) {
-		r.Use(auth.AuthMiddleware(log))
-		studentHandler.RegisterRoutes(r)
-		projectHandler.RegisterRoutes(r)
+	apiGroup := app.router.Group("/api")
+	apiGroup.Use(auth.AuthMiddleware(log))
+	studentHandler.RegisterRoutes(apiGroup)
+	projectHandler.RegisterRoutes(apiGroup)
 
-		// Message handler (only if NATS is available)
-		if natsProducer != nil {
-			messageService := message.NewService(natsProducer, log)
-			messageHandler := message.NewHandler(messageService, log, app.serviceMetrics)
-			messageHandler.RegisterRoutes(r)
-		}
-	})
+	// Message handler (only if NATS is available)
+	if natsProducer != nil {
+		messageService := message.NewService(natsProducer, log)
+		messageHandler := message.NewHandler(messageService, log, app.serviceMetrics)
+		messageHandler.RegisterRoutes(apiGroup)
+	}
 
 	log.Info("application initialized successfully")
 
@@ -170,12 +178,35 @@ func New() *App {
 }
 
 func (a *App) Run() error {
-	a.server = &http.Server{
-		Addr:    fmt.Sprintf(":%s", a.config.Server.Port),
-		Handler: a.router,
+	readTimeout := a.config.Server.ReadTimeout
+	if readTimeout == 0 {
+		readTimeout = 30
 	}
 
-	a.logger.Info("server starting", "port", a.config.Server.Port)
+	writeTimeout := a.config.Server.WriteTimeout
+	if writeTimeout == 0 {
+		writeTimeout = 30
+	}
+
+	idleTimeout := a.config.Server.IdleTimeout
+	if idleTimeout == 0 {
+		idleTimeout = 120
+	}
+
+	a.server = &http.Server{
+		Addr:         fmt.Sprintf(":%s", a.config.Server.Port),
+		Handler:      a.router,
+		ReadTimeout:  time.Duration(readTimeout) * time.Second,
+		WriteTimeout: time.Duration(writeTimeout) * time.Second,
+		IdleTimeout:  time.Duration(idleTimeout) * time.Second,
+	}
+
+	a.logger.Info("server starting",
+		"port", a.config.Server.Port,
+		"read_timeout_seconds", readTimeout,
+		"write_timeout_seconds", writeTimeout,
+		"idle_timeout_seconds", idleTimeout,
+	)
 	return a.server.ListenAndServe()
 }
 
