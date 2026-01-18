@@ -273,6 +273,19 @@ tf/apply: ## Apply Terraform configuration
 
 tf/destroy: ## Destroy Terraform resources (preserves DNS, Gateway certs, IPs)
 	@echo "🗑️  Destroying Terraform resources..."
+	@echo "🧹 Cleaning up Kubernetes resources first..."
+	@echo "    - Deleting grud namespace (Gateway API, apps)..."
+	@kubectl delete namespace grud --wait=true --timeout=5m 2>/dev/null || echo "    ⚠️  grud namespace not found (already deleted)"
+	@echo "    - Deleting infra resources (Prometheus, Grafana, Alloy, etc.)..."
+	@kubectl delete namespace infra --wait=true --timeout=5m 2>/dev/null || echo "    ⚠️  infra namespace not found (already deleted)"
+	@echo "    - Waiting for GCP load balancers to cleanup (30s)..."
+	@sleep 30
+	@echo "    - Cleaning up Cloud SQL dependencies..."
+	@echo "      Dropping student_user role from PostgreSQL..."
+	@gcloud sql databases delete university --instance=grud-postgres --quiet 2>/dev/null || echo "      ⚠️  Database already deleted"
+	@gcloud sql databases delete projects --instance=grud-postgres --quiet 2>/dev/null || echo "      ⚠️  Database already deleted"
+	@echo "✅ Kubernetes cleanup complete"
+	@echo ""
 	@echo "🛡️  Removing protected resources from state..."
 	@echo "    - DNS zone and records"
 	@cd $(TF_DIR) && terraform state rm google_dns_managed_zone.grudapp 2>/dev/null || true
@@ -290,7 +303,7 @@ tf/destroy: ## Destroy Terraform resources (preserves DNS, Gateway certs, IPs)
 	@cd $(TF_DIR) && terraform state rm google_certificate_manager_certificate_map_entry.wildcard 2>/dev/null || true
 	@echo "📝 Note: Old Ingress SSL cert (google_compute_managed_ssl_certificate.grud) WILL be deleted"
 	@echo "🚀 Running terraform destroy..."
-	@cd $(TF_DIR) && terraform destroy -auto-approve
+	@cd $(TF_DIR) && terraform destroy -auto-approve -refresh=false
 
 tf/output: ## Show Terraform outputs
 	@cd $(TF_DIR) && terraform output
