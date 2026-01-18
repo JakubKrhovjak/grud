@@ -13,6 +13,8 @@ kind: ConfigMap
 metadata:
   name: student-service-config
   namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "grud.componentLabels" (dict "componentName" "student-service" "root" .) | nindent 4 }}
 data:
   ENV: {{ .Values.studentService.config.env | quote }}
   SERVER_PORT: {{ .Values.studentService.config.serverPort | quote }}
@@ -26,6 +28,8 @@ kind: ConfigMap
 metadata:
   name: student-service-file-config
   namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "grud.componentLabels" (dict "componentName" "student-service" "root" .) | nindent 4 }}
 data:
   config.{{ .Values.studentService.config.env }}.yaml: |
     env: {{ .Values.studentService.config.env }}
@@ -57,6 +61,8 @@ kind: Service
 metadata:
   name: student-service
   namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "grud.componentLabels" (dict "componentName" "student-service" "root" .) | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
@@ -71,6 +77,8 @@ kind: Deployment
 metadata:
   name: student-service
   namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "grud.componentLabels" (dict "componentName" "student-service" "root" .) | nindent 4 }}
 spec:
   replicas: {{ .Values.studentService.replicaCount }}
   selector:
@@ -121,17 +129,17 @@ spec:
             - name: DB_NAME
               valueFrom:
                 secretKeyRef:
-                  name: student-db-secret
-                  key: database
+                  name: {{ .Values.studentService.database.secretName }}
+                  key: dbname
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: student-db-secret
+                  name: {{ .Values.studentService.database.secretName }}
                   key: username
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: student-db-secret
+                  name: {{ .Values.studentService.database.secretName }}
                   key: password
             - name: JWT_SECRET
               valueFrom:
