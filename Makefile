@@ -72,6 +72,7 @@ kind/deploy: ## Deploy to Kind with Helm
 	@echo "✅ Deployed to Kind"
 
 kind/status: ## Show Kind cluster status
+	@kubectl config use-context kind-$(KIND_CLUSTER_NAME) 2>/dev/null || true
 	@echo "📋 Kind Cluster Status"
 	@echo ""
 	@echo "Nodes:"
@@ -87,6 +88,7 @@ kind/status: ## Show Kind cluster status
 	@kubectl get services -n grud
 
 kind/wait: ## Wait for all resources to be ready
+	@kubectl config use-context kind-$(KIND_CLUSTER_NAME) 2>/dev/null || true
 	@echo "⏳ Waiting for databases..."
 	@kubectl wait --for=condition=Ready pod -l app=student-db -n grud --timeout=300s
 	@kubectl wait --for=condition=Ready pod -l app=project-db -n grud --timeout=300s
@@ -103,7 +105,12 @@ kind/stop: ## Stop Kind cluster (without deleting)
 
 kind/start: ## Start Kind cluster
 	@echo "▶️  Starting Kind cluster..."
+	@if ! docker ps -a --format '{{.Names}}' | grep -q "$(KIND_CLUSTER_NAME)-control-plane"; then \
+		echo "❌ Kind cluster doesn't exist. Run 'make kind/setup' first."; \
+		exit 1; \
+	fi
 	@docker start $(KIND_CLUSTER_NAME)-control-plane $(KIND_CLUSTER_NAME)-worker $(KIND_CLUSTER_NAME)-worker2 $(KIND_CLUSTER_NAME)-worker3 2>/dev/null || true
+	@kubectl config use-context kind-$(KIND_CLUSTER_NAME)
 	@echo "⏳ Waiting for cluster to be ready..."
 	@kubectl wait --for=condition=Ready nodes --all --timeout=120s
 	@echo "✅ Cluster started and ready!"
