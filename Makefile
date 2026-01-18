@@ -54,22 +54,26 @@ kind/setup: ## Create Kind cluster
 	@echo "🚀 Creating Kind cluster..."
 	@./scripts/kind-setup.sh
 
-kind/deploy: ## Deploy to Kind with Helm
+kind/build: ## Build and push images to local registry
+	@echo "📦 Building and pushing images to local registry..."
+	@echo "🔨 Building student-service..."
+	@cd services/student-service && KO_DOCKER_REPO=localhost:5001 ko build --bare -t latest ./cmd/student-service
+	@echo "🔨 Building project-service..."
+	@cd services/project-service && KO_DOCKER_REPO=localhost:5001 ko build --bare -t latest ./cmd/project-service
+	@echo "🔨 Building admin-panel..."
+	@docker build -t localhost:5001/admin-panel:latest services/admin
+	@docker push localhost:5001/admin-panel:latest
+	@echo "✅ All images built and pushed to localhost:5001"
+
+kind/deploy: ## Deploy to Kind with Helm (requires images in local registry)
 	@echo "🚀 Deploying to Kind with Helm..."
-	@echo "📦 Building Go services with ko..."
-	@cd services/student-service && KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=grud-cluster ko build --bare ./cmd/student-service 2>&1 | grep "Loading" | sed 's/.*Loading //' > /tmp/student-image.txt
-	@cd services/project-service && KO_DOCKER_REPO=kind.local KIND_CLUSTER_NAME=grud-cluster ko build --bare ./cmd/project-service 2>&1 | grep "Loading" | sed 's/.*Loading //' > /tmp/project-image.txt
-	@echo "📦 Building admin-panel..."
-	@docker build -t admin-panel:latest services/admin
-	@kind load docker-image admin-panel:latest --name grud-cluster
-	@echo "🚀 Deploying with Helm..."
 	@helm upgrade --install grud k8s/grud \
 		-n grud --create-namespace \
 		-f k8s/grud/values-kind.yaml \
-		--set studentService.image.repository=$$(cat /tmp/student-image.txt) \
-		--set projectService.image.repository=$$(cat /tmp/project-image.txt) \
 		--wait
 	@echo "✅ Deployed to Kind"
+
+kind/build-deploy: kind/build kind/deploy ## Build images and deploy to Kind
 
 kind/status: ## Show Kind cluster status
 	@kubectl config use-context kind-$(KIND_CLUSTER_NAME) 2>/dev/null || true

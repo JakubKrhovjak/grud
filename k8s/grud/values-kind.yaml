@@ -30,6 +30,9 @@ databases:
 studentService:
   enabled: true
   replicaCount: 2
+  image:
+    repository: localhost:5001/student-service
+    tag: latest
   config:
     env: kind
   # Use secrets for sensitive data
@@ -38,11 +41,17 @@ studentService:
 projectService:
   enabled: true
   replicaCount: 2
+  image:
+    repository: localhost:5001/project-service
+    tag: latest
   config:
     env: kind
   useSecrets: true
 
 adminPanel:
+  image:
+    repository: localhost:5001/admin-panel
+    tag: latest
   config:
     apiUrl: "http://localhost:8080"
   enabled: true
