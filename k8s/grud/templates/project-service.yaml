@@ -79,6 +79,8 @@ spec:
     metadata:
       labels:
         app: project-service
+        {{- include "grud.labels" . | nindent 8 }}
+        component: project-service
     spec:
       {{- if .Values.projectService.tolerations }}
       tolerations:

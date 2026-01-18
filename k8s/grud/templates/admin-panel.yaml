@@ -44,6 +44,8 @@ spec:
     metadata:
       labels:
         app: admin-panel
+        {{- include "grud.labels" . | nindent 8 }}
+        component: admin-panel
     spec:
       {{- if .Values.adminPanel.tolerations }}
       tolerations:

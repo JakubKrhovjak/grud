@@ -57,9 +57,11 @@ kind/setup: ## Create Kind cluster
 kind/build: ## Build and push images to local registry
 	@echo "📦 Building and pushing images to local registry..."
 	@echo "🔨 Building student-service..."
-	@cd services/student-service && KO_DOCKER_REPO=localhost:5001 ko build --bare -t latest ./cmd/student-service
+	@cd services/student-service && KO_DOCKER_REPO=localhost:5001/student-service \
+		ko build --bare --insecure-registry -t latest ./cmd/student-service
 	@echo "🔨 Building project-service..."
-	@cd services/project-service && KO_DOCKER_REPO=localhost:5001 ko build --bare -t latest ./cmd/project-service
+	@cd services/project-service && KO_DOCKER_REPO=localhost:5001/project-service \
+		ko build --bare --insecure-registry -t latest ./cmd/project-service
 	@echo "🔨 Building admin-panel..."
 	@docker build -t localhost:5001/admin-panel:latest services/admin
 	@docker push localhost:5001/admin-panel:latest

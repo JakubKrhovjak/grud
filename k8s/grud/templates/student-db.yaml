@@ -45,6 +45,8 @@ spec:
     metadata:
       labels:
         app: student-db
+        {{- include "grud.labels" . | nindent 8 }}
+        component: student-db
     spec:
       {{- if .Values.studentDb.tolerations }}
       tolerations:

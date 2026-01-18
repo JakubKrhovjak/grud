@@ -16,12 +16,12 @@ metadata:
   labels:
     {{- include "grud.componentLabels" (dict "componentName" "student-service" "root" .) | nindent 4 }}
 data:
-  ENV: {{ .Values.studentService.config.env | quote }}
-  SERVER_PORT: {{ .Values.studentService.config.serverPort | quote }}
-  PROJECT_SERVICE_GRPC: {{ .Values.studentService.config.grpcEndpoint | quote }}
-  NATS_URL: {{ .Values.studentService.config.natsUrl | quote }}
-  NATS_SUBJECT: {{ .Values.studentService.config.natsSubject | quote }}
-  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.studentService.config.otelEndpoint | quote }}
+  ENV: {{ required "studentService.config.env is required!" .Values.studentService.config.env | quote }}
+  SERVER_PORT: {{ .Values.studentService.config.serverPort | default "8080" | quote }}
+  PROJECT_SERVICE_GRPC: {{ required "studentService.config.grpcEndpoint is required!" .Values.studentService.config.grpcEndpoint | quote }}
+  NATS_URL: {{ required "studentService.config.natsUrl is required!" .Values.studentService.config.natsUrl | quote }}
+  NATS_SUBJECT: {{ .Values.studentService.config.natsSubject | default "student.events" | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.studentService.config.otelEndpoint | default "http://alloy.infra:4318" | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -88,6 +88,8 @@ spec:
     metadata:
       labels:
         app: student-service
+        {{- include "grud.labels" . | nindent 8 }}
+        component: student-service
     spec:
       {{- if .Values.studentService.tolerations }}
       tolerations:
