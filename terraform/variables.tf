@@ -58,6 +58,12 @@ variable "app_node_count" {
   type        = number
 }
 
+variable "system_machine_type" {
+  description = "Machine type for system nodes (kube-system components)"
+  type        = string
+  default     = "e2-medium"
+}
+
 variable "app_machine_type" {
   description = "Machine type for app nodes"
   type        = string
@@ -95,16 +101,7 @@ variable "master_authorized_networks" {
     cidr_block   = string
     display_name = string
   }))
-  default = [
-    {
-      cidr_block   = "10.0.0.0/24"
-      display_name = "VPC subnet"
-    },
-    {
-      cidr_block   = "141.170.140.27/32"
-      display_name = "Terraform destroy"
-    }
-  ]
+  default = []
 }
 
 # Cloud SQL

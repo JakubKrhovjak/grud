@@ -1,32 +1,32 @@
 # =============================================================================
-# HTTPRoute for Grafana (grafana.grudapp.com)
+# HTTPRoute for ArgoCD (argo.grudapp.com)
 # =============================================================================
-# Routes HTTPS traffic to Grafana monitoring dashboard.
+# Routes HTTPS traffic to ArgoCD UI and API.
 # Protected by Cloud IAP - requires Google authentication.
 #
 # Traffic flow:
-#   Internet → Gateway → IAP Auth → HTTPRoute → Service → Grafana Pod
+#   Internet → Gateway → IAP Auth → HTTPRoute → Service → ArgoCD Pod
 #
 # Endpoints:
-#   - https://grafana.grudapp.com/* → grafana-gateway:80 (IAP protected)
+#   - https://argo.grudapp.com/* → argocd-gateway:80 (IAP protected)
 #
 # Cross-namespace routing:
-#   This HTTPRoute is in 'infra' namespace but references Gateway in 'grud'.
+#   This HTTPRoute is in 'infra' namespace but references Gateway in 'apps'.
 #   Requires ReferenceGrant (k8s/gateway/reference-grant.yaml) to allow this.
 #
 # Related resources:
 #   - Gateway: grud-gateway (k8s/gateway/gateway.yaml)
-#   - Service: grafana-gateway (k8s/infra/grafana-gateway-service.yaml)
+#   - Service: argocd-gateway (k8s/infra/argocd-backend.yaml)
 #   - ReferenceGrant: allow-gateway-from-infra (reference-grant.yaml)
-#   - HealthCheck: grafana-healthcheck (healthcheck-policies.yaml)
-#   - BackendPolicy: grafana-iap-policy (gcp-backend-policy.yaml) - IAP config
+#   - HealthCheck: argocd-healthcheck (healthcheck-policies.yaml)
+#   - BackendPolicy: argocd-iap-policy (gcp-backend-policy.yaml) - IAP config
 #
 # Docs: https://gateway-api.sigs.k8s.io/api-types/httproute/
 # =============================================================================
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: grafana-route
+  name: argocd-route
   namespace: infra  # Different namespace than Gateway
 spec:
   # Reference to parent Gateway (cross-namespace, requires ReferenceGrant)
@@ -36,14 +36,14 @@ spec:
       sectionName: https  # Only match HTTPS listener (port 443)
   # Hostname matching
   hostnames:
-    - "grafana.grudapp.com"
+    - "argo.grudapp.com"
   # Routing rules
   rules:
-    # All paths → grafana-gateway service
+    # All paths → argocd-gateway service
     - matches:
         - path:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: grafana-gateway
+        - name: argocd-gateway
           port: 80

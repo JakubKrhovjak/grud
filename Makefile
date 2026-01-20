@@ -3,7 +3,9 @@
 # =============================================================================
 # Build Configuration
 # =============================================================================
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION_FILE := VERSION
+CURRENT_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null || echo "0.0.0")
+VERSION ?= $(CURRENT_VERSION)
 GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -38,6 +40,16 @@ version: ## Show version info
 	@echo "Git Commit: $(GIT_COMMIT)"
 	@echo "Build Time: $(BUILD_TIME)"
 
+version/bump: ## Bump patch version (0.0.1 -> 0.0.2)
+	@echo "📌 Current version: $(CURRENT_VERSION)"
+	@MAJOR=$$(echo $(CURRENT_VERSION) | cut -d. -f1); \
+	MINOR=$$(echo $(CURRENT_VERSION) | cut -d. -f2); \
+	PATCH=$$(echo $(CURRENT_VERSION) | cut -d. -f3); \
+	NEW_PATCH=$$((PATCH + 1)); \
+	NEW_VERSION="$$MAJOR.$$MINOR.$$NEW_PATCH"; \
+	echo $$NEW_VERSION > $(VERSION_FILE); \
+	echo "✅ Bumped to: $$NEW_VERSION"
+
 # =============================================================================
 # Test Targets
 # =============================================================================
@@ -54,26 +66,49 @@ kind/setup: ## Create Kind cluster
 	@echo "🚀 Creating Kind cluster..."
 	@./scripts/kind-setup.sh
 
-kind/build: ## Build and push images to local registry
-	@echo "📦 Building and pushing images to local registry..."
-	@echo "🔨 Building student-service..."
-	@cd services/student-service && KO_DOCKER_REPO=localhost:5001/student-service \
-		ko build --bare --insecure-registry -t latest ./cmd/student-service
-	@echo "🔨 Building project-service..."
-	@cd services/project-service && KO_DOCKER_REPO=localhost:5001/project-service \
-		ko build --bare --insecure-registry -t latest ./cmd/project-service
-	@echo "🔨 Building admin-panel..."
-	@docker build -t localhost:5001/admin-panel:latest services/admin
-	@docker push localhost:5001/admin-panel:latest
-	@echo "✅ All images built and pushed to localhost:5001"
+kind/build: version/bump ## Build and push images to local registry with auto-incremented VERSION
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📦 Building and pushing images to local registry..."; \
+	echo "📌 Version: $$NEW_VERSION"; \
+	echo "🔨 Building student-service..."; \
+	cd services/student-service && KO_DOCKER_REPO=localhost:5001/student-service \
+		ko build --bare --insecure-registry -t $$NEW_VERSION -t latest ./cmd/student-service; \
+	cd ../..; \
+	echo "🔨 Building project-service..."; \
+	cd services/project-service && KO_DOCKER_REPO=localhost:5001/project-service \
+		ko build --bare --insecure-registry -t $$NEW_VERSION -t latest ./cmd/project-service; \
+	cd ../..; \
+	echo "🔨 Building admin-panel..."; \
+	docker build -t localhost:5001/admin-panel:$$NEW_VERSION -t localhost:5001/admin-panel:latest services/admin; \
+	docker push localhost:5001/admin-panel:$$NEW_VERSION; \
+	docker push localhost:5001/admin-panel:latest; \
+	echo "✅ All images built and pushed with tag: $$NEW_VERSION"
 
 kind/deploy: ## Deploy to Kind with Helm (requires images in local registry)
 	@echo "🚀 Deploying to Kind with Helm..."
-	@helm upgrade --install grud k8s/grud \
-		-n grud --create-namespace \
-		-f k8s/grud/values-kind.yaml \
+	@helm upgrade --install apps k8s/apps \
+		-n apps --create-namespace \
+		-f k8s/apps/values-kind.yaml \
 		--wait
 	@echo "✅ Deployed to Kind"
+
+kind/update-version: ## Update image tags in values-kind.yaml
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📝 Updating image tags to $$NEW_VERSION in values-kind.yaml..."; \
+	sed -i.bak "s/tag: .*/tag: $$NEW_VERSION/" k8s/apps/values-kind.yaml; \
+	rm k8s/apps/values-kind.yaml.bak 2>/dev/null || true; \
+	echo "✅ Updated values-kind.yaml with version $$NEW_VERSION"
+
+kind/build-update: kind/build kind/update-version ## Build images and update values-kind.yaml
+	@echo "✅ Images built and values-kind.yaml updated"
+
+kind/build-commit: kind/build-update ## Build, update values and commit to git (triggers ArgoCD sync)
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📤 Committing version $$NEW_VERSION to git..."; \
+	git add $(VERSION_FILE) k8s/apps/values-kind.yaml; \
+	git commit -m "Bump version to $$NEW_VERSION" || echo "⚠️  No changes to commit"; \
+	git push origin argo; \
+	echo "✅ Version $$NEW_VERSION committed and pushed - ArgoCD will sync automatically"
 
 kind/build-deploy: kind/build kind/deploy ## Build images and deploy to Kind
 
@@ -85,23 +120,23 @@ kind/status: ## Show Kind cluster status
 	@kubectl get nodes -o wide
 	@echo ""
 	@echo "Deployments:"
-	@kubectl get deployments -n grud
+	@kubectl get deployments -n apps
 	@echo ""
 	@echo "Pods:"
-	@kubectl get pods -n grud -o wide
+	@kubectl get pods -n apps -o wide
 	@echo ""
 	@echo "Services:"
-	@kubectl get services -n grud
+	@kubectl get services -n apps
 
 kind/wait: ## Wait for all resources to be ready
 	@kubectl config use-context kind-$(KIND_CLUSTER_NAME) 2>/dev/null || true
 	@echo "⏳ Waiting for databases..."
-	@kubectl wait --for=condition=Ready pod -l app=student-db -n grud --timeout=300s
-	@kubectl wait --for=condition=Ready pod -l app=project-db -n grud --timeout=300s
+	@kubectl wait --for=condition=Ready pod -l app=student-db -n apps --timeout=300s
+	@kubectl wait --for=condition=Ready pod -l app=project-db -n apps --timeout=300s
 	@echo "⏳ Waiting for services..."
-	@kubectl wait --for=condition=Available deployment/student-service -n grud --timeout=300s
-	@kubectl wait --for=condition=Available deployment/project-service -n grud --timeout=300s
-	@kubectl wait --for=condition=Available deployment/admin-panel -n grud --timeout=300s
+	@kubectl wait --for=condition=Available deployment/student-service -n apps --timeout=300s
+	@kubectl wait --for=condition=Available deployment/project-service -n apps --timeout=300s
+	@kubectl wait --for=condition=Available deployment/admin-panel -n apps --timeout=300s
 	@echo "✅ All resources ready!"
 
 kind/stop: ## Stop Kind cluster (without deleting)
@@ -148,22 +183,42 @@ gke/connect: ## Connect to GKE cluster via Connect Gateway
 		--project=$(GCP_PROJECT)
 	@echo "✅ Connected to $(GKE_CLUSTER) via Connect Gateway"
 
-gke/build: ## Build and push images to Artifact Registry
-	@echo "📦 Building and pushing images to Artifact Registry (linux/amd64)..."
-	@KO_DOCKER_REPO=$(GKE_REGISTRY)/student-service ko build --bare -t latest --platform=linux/amd64 ./services/student-service/cmd/student-service
-	@KO_DOCKER_REPO=$(GKE_REGISTRY)/project-service ko build --bare -t latest --platform=linux/amd64 ./services/project-service/cmd/project-service
-	@echo "📦 Building admin-panel via Cloud Build (AMD64)..."
-	@gcloud builds submit services/admin --tag=$(GKE_REGISTRY)/admin-panel:latest --project=$(GCP_PROJECT) --quiet
-	@echo "✅ Images pushed to $(GKE_REGISTRY)"
+gke/build: version/bump ## Build and push images to Artifact Registry with auto-incremented VERSION
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📦 Building and pushing images to Artifact Registry (linux/amd64)..."; \
+	echo "📌 Version: $$NEW_VERSION"; \
+	KO_DOCKER_REPO=$(GKE_REGISTRY)/student-service ko build --bare -t $$NEW_VERSION -t latest --platform=linux/amd64 ./services/student-service/cmd/student-service; \
+	KO_DOCKER_REPO=$(GKE_REGISTRY)/project-service ko build --bare -t $$NEW_VERSION -t latest --platform=linux/amd64 ./services/project-service/cmd/project-service; \
+	echo "📦 Building admin-panel via Cloud Build (AMD64)..."; \
+	gcloud builds submit services/admin --tag=$(GKE_REGISTRY)/admin-panel:$$NEW_VERSION --project=$(GCP_PROJECT) --quiet; \
+	echo "✅ Images pushed to $(GKE_REGISTRY) with tag: $$NEW_VERSION"
+
+gke/update-version: ## Update image tags in values-gke.yaml
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📝 Updating image tags to $$NEW_VERSION in values-gke.yaml..."; \
+	sed -i.bak "s/tag: .*/tag: $$NEW_VERSION/" k8s/apps/values-gke.yaml; \
+	rm k8s/apps/values-gke.yaml.bak 2>/dev/null || true; \
+	echo "✅ Updated values-gke.yaml with version $$NEW_VERSION"
+
+gke/build-update: gke/build gke/update-version ## Build images and update values-gke.yaml
+	@echo "✅ Images built and values-gke.yaml updated"
+
+gke/build-commit: gke/build-update ## Build, update values and commit to git (triggers ArgoCD sync)
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📤 Committing version $$NEW_VERSION to git..."; \
+	git add $(VERSION_FILE) k8s/apps/values-gke.yaml; \
+	git commit -m "Bump GKE version to $$NEW_VERSION" || echo "⚠️  No changes to commit"; \
+	git push; \
+	echo "✅ Version $$NEW_VERSION committed and pushed - ArgoCD will sync automatically"
 
 gke/deploy: gke/build  ## Deploy to GKE with Helm
 	@echo "🔗 Connecting to GKE cluster via Connect Gateway..."
 	@gcloud container fleet memberships get-credentials $(GKE_CLUSTER) --location=$(GCP_REGION) --project=$(GCP_PROJECT)
 	@echo "🚀 Deploying to GKE with Helm..."
 	@CLOUDSQL_IP=$$(cd $(TF_DIR) && terraform output -raw cloudsql_private_ip) && \
-	helm upgrade --install grud k8s/grud \
-		-n grud --create-namespace \
-		-f k8s/grud/values-gke.yaml \
+	helm upgrade --install apps k8s/apps \
+		-n apps --create-namespace \
+		-f k8s/apps/values-gke.yaml \
 		--set studentService.image.repository=$(GKE_REGISTRY)/student-service \
 		--set projectService.image.repository=$(GKE_REGISTRY)/project-service \
 		--set adminPanel.image.repository=$(GKE_REGISTRY)/admin-panel \
@@ -171,7 +226,7 @@ gke/deploy: gke/build  ## Deploy to GKE with Helm
 		--set secrets.gcp.projectId=$(GCP_PROJECT) \
 		--set secrets.gcp.clusterLocation=$(GCP_ZONE) \
 		--wait
-	@kubectl rollout restart deployment -n grud
+	@kubectl rollout restart deployment -n apps
 	@echo "🌐 Deploying Gateway API..."
 	@kubectl apply -f k8s/gateway/
 	@echo "✅ Deployed to GKE"
@@ -183,25 +238,25 @@ gke/status: ## Show GKE cluster status
 	@kubectl get nodes -o wide
 	@echo ""
 	@echo "Deployments:"
-	@kubectl get deployments -n grud
+	@kubectl get deployments -n apps
 	@echo ""
 	@echo "Pods:"
-	@kubectl get pods -n grud -o wide
+	@kubectl get pods -n apps -o wide
 	@echo ""
 	@echo "Services:"
-	@kubectl get services -n grud
+	@kubectl get services -n apps
 
-gke/resources: ## Show resource utilization for grud namespace and nodes
+gke/resources: ## Show resource utilization for apps namespace and nodes
 	@echo "📊 Resource Utilization"
 	@echo ""
 	@echo "=== Node Resources ==="
 	@kubectl top nodes
 	@echo ""
-	@echo "=== Pod Resources (grud namespace) ==="
-	@kubectl top pods -n grud --containers
+	@echo "=== Pod Resources (apps namespace) ==="
+	@kubectl top pods -n apps --containers
 	@echo ""
 	@echo "=== Resource Requests/Limits ==="
-	@kubectl get pods -n grud -o custom-columns="\
+	@kubectl get pods -n apps -o custom-columns="\
 NAME:.metadata.name,\
 CPU_REQ:.spec.containers[*].resources.requests.cpu,\
 CPU_LIM:.spec.containers[*].resources.limits.cpu,\
@@ -209,8 +264,8 @@ MEM_REQ:.spec.containers[*].resources.requests.memory,\
 MEM_LIM:.spec.containers[*].resources.limits.memory"
 
 gke/clean: ## Clean uninstall grud helm release and all pods
-	@echo "🧹 Cleaning grud namespace..."
-	@helm uninstall grud -n grud --wait 2>/dev/null || true
+	@echo "🧹 Cleaning apps namespace..."
+	@helm uninstall apps -n apps --wait 2>/dev/null || true
 	@echo "✅ Cleanup complete"
 
 gke/prometheus: ## Port-forward Prometheus (localhost:9090)
@@ -237,18 +292,18 @@ gke/gateway: ## Deploy Gateway API resources
 	@echo "✅ Gateway deployed"
 	@echo ""
 	@echo "Check Gateway status:"
-	@echo "  kubectl get gateway -n grud"
+	@echo "  kubectl get gateway -n apps"
 	@echo "  kubectl get httproute -A"
 
 gke/gateway-status: ## Show Gateway and HTTPRoute status
 	@echo "=== Gateway ==="
-	@kubectl get gateway -n grud -o wide
+	@kubectl get gateway -n apps -o wide
 	@echo ""
 	@echo "=== HTTPRoutes ==="
 	@kubectl get httproute -A
 	@echo ""
 	@echo "=== Gateway Details ==="
-	@kubectl describe gateway grud-gateway -n grud | tail -20
+	@kubectl describe gateway grud-gateway -n apps | tail -20
 
 # =============================================================================
 # Terraform
@@ -271,6 +326,7 @@ tf/apply: ## Apply Terraform configuration
 	@cd $(TF_DIR) && terraform import -var="skip_kubernetes_provider=true" google_dns_record_set.root $(GCP_PROJECT)/grudapp-zone/grudapp.com./A 2>/dev/null || true
 	@cd $(TF_DIR) && terraform import -var="skip_kubernetes_provider=true" google_dns_record_set.grafana $(GCP_PROJECT)/grudapp-zone/grafana.grudapp.com./A 2>/dev/null || true
 	@cd $(TF_DIR) && terraform import -var="skip_kubernetes_provider=true" google_dns_record_set.admin $(GCP_PROJECT)/grudapp-zone/admin.grudapp.com./A 2>/dev/null || true
+	@cd $(TF_DIR) && terraform import -var="skip_kubernetes_provider=true" google_dns_record_set.argocd $(GCP_PROJECT)/grudapp-zone/argo.grudapp.com./A 2>/dev/null || true
 	@cd $(TF_DIR) && terraform import -var="skip_kubernetes_provider=true" google_compute_managed_ssl_certificate.grud projects/$(GCP_PROJECT)/global/sslCertificates/grud-cert 2>/dev/null || true
 	@cd $(TF_DIR) && terraform import -var="skip_kubernetes_provider=true" google_certificate_manager_certificate_map.grud projects/$(GCP_PROJECT)/locations/global/certificateMaps/grud-certmap 2>/dev/null || true
 	@cd $(TF_DIR) && terraform import -var="skip_kubernetes_provider=true" google_certificate_manager_dns_authorization.grudapp projects/$(GCP_PROJECT)/locations/global/dnsAuthorizations/grudapp-dns-auth 2>/dev/null || true
@@ -287,8 +343,8 @@ tf/apply: ## Apply Terraform configuration
 tf/destroy: ## Destroy Terraform resources (preserves DNS, Gateway certs, IPs)
 	@echo "🗑️  Destroying Terraform resources..."
 	@echo "🧹 Cleaning up Kubernetes resources first..."
-	@echo "    - Deleting grud namespace (Gateway API, apps)..."
-	@kubectl delete namespace grud --wait=true --timeout=5m 2>/dev/null || echo "    ⚠️  grud namespace not found (already deleted)"
+	@echo "    - Deleting apps namespace (Gateway API, apps)..."
+	@kubectl delete namespace apps --wait=true --timeout=5m 2>/dev/null || echo "    ⚠️  apps namespace not found (already deleted)"
 	@echo "    - Deleting infra resources (Prometheus, Grafana, Alloy, etc.)..."
 	@kubectl delete namespace infra --wait=true --timeout=5m 2>/dev/null || echo "    ⚠️  infra namespace not found (already deleted)"
 	@echo "    - Waiting for GCP load balancers to cleanup (30s)..."
@@ -305,6 +361,7 @@ tf/destroy: ## Destroy Terraform resources (preserves DNS, Gateway certs, IPs)
 	@cd $(TF_DIR) && terraform state rm google_dns_record_set.root 2>/dev/null || true
 	@cd $(TF_DIR) && terraform state rm google_dns_record_set.grafana 2>/dev/null || true
 	@cd $(TF_DIR) && terraform state rm google_dns_record_set.admin 2>/dev/null || true
+	@cd $(TF_DIR) && terraform state rm google_dns_record_set.argocd 2>/dev/null || true
 	@cd $(TF_DIR) && terraform state rm google_dns_record_set.cert_validation 2>/dev/null || true
 	@echo "    - Static IP"
 	@cd $(TF_DIR) && terraform state rm 'data.google_compute_global_address.ingress_ip' 2>/dev/null || true
@@ -325,8 +382,8 @@ gke/ingress: ## Show Ingress status and external IP
 	@echo "=== Shared Static IP (Terraform) ==="
 	@cd $(TF_DIR) && terraform output ingress_ip 2>/dev/null || echo "Not created yet"
 	@echo ""
-	@echo "=== App Ingress (grud namespace) ==="
-	@kubectl get ingress -n grud 2>/dev/null || echo "No ingress found"
+	@echo "=== App Ingress (apps namespace) ==="
+	@kubectl get ingress -n apps 2>/dev/null || echo "No ingress found"
 	@echo ""
 	@echo "=== Grafana Ingress (infra namespace) ==="
 	@kubectl get ingress -n infra 2>/dev/null || echo "No ingress found"
@@ -370,14 +427,14 @@ tf/validate: ## Validate Terraform configuration
 # Helm Utilities
 # =============================================================================
 helm/template-kind: ## Show rendered templates for Kind
-	@helm template grud k8s/grud -f k8s/grud/values-kind.yaml
+	@helm template apps k8s/apps -f k8s/apps/values-kind.yaml
 
 helm/template-gke: ## Show rendered templates for GKE
-	@helm template grud k8s/grud -f k8s/grud/values-gke.yaml
+	@helm template apps k8s/apps -f k8s/apps/values-gke.yaml
 
 helm/uninstall: ## Uninstall Helm release
 	@echo "🗑️  Uninstalling Helm release..."
-	@helm uninstall grud -n grud || true
+	@helm uninstall apps -n apps || true
 	@echo "✅ Helm release uninstalled"
 
 # =============================================================================
@@ -561,7 +618,7 @@ secrets/generate-kind: ## Generate secrets for Kind cluster
 
 secrets/list-kind: ## List secrets in Kind cluster
 	@echo "📋 Secrets in Kind cluster:"
-	@kubectl get secrets -n grud -l app=grud,component=secrets
+	@kubectl get secrets -n apps -l app=grud,component=secrets
 
 secrets/list-gke: ## List secrets in Google Secret Manager
 	@echo "📋 Secrets in Google Secret Manager:"
@@ -586,10 +643,15 @@ help: ## Show this help
 	@echo "Build:"
 	@echo "  make build              - Build all services"
 	@echo "  make version            - Show version info"
+	@echo "  make version/bump       - Bump patch version (0.0.1 -> 0.0.2)"
 	@echo "  make test               - Run all tests"
 	@echo ""
 	@echo "Kind Cluster:"
 	@echo "  make kind/setup         - Create Kind cluster"
+	@echo "  make kind/build         - Build and push images with VERSION tag"
+	@echo "  make kind/update-version - Update values-kind.yaml with VERSION"
+	@echo "  make kind/build-update  - Build and update values-kind.yaml"
+	@echo "  make kind/build-commit  - Build, update values and commit (triggers ArgoCD)"
 	@echo "  make kind/deploy        - Deploy to Kind with Helm"
 	@echo "  make kind/status        - Show cluster status"
 	@echo "  make kind/wait          - Wait for resources to be ready"
@@ -600,6 +662,10 @@ help: ## Show this help
 	@echo "GKE Cluster:"
 	@echo "  make gke/auth           - Authenticate with GCP"
 	@echo "  make gke/connect        - Connect to GKE via Connect Gateway"
+	@echo "  make gke/build          - Build and push images with VERSION tag"
+	@echo "  make gke/update-version - Update values-gke.yaml with VERSION"
+	@echo "  make gke/build-update   - Build and update values-gke.yaml"
+	@echo "  make gke/build-commit   - Build, update values and commit (triggers ArgoCD)"
 	@echo "  make gke/deploy         - Build and deploy to GKE with Helm"
 	@echo "  make gke/full-deploy    - Full GKE deployment (terraform + helm)"
 	@echo "  make gke/status         - Show GKE status"
