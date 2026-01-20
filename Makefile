@@ -453,7 +453,7 @@ infra/deploy-alerts: ## Deploy alerting rules
 	@kubectl apply -f k8s/infra/alerting-rules.yaml
 	@echo "✅ Alerting rules deployed"
 
-infra/deploy: infra/setup infra/deploy-prometheus infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts ## Deploy full observability stack (Kind)
+infra/deploy: infra/setup infra/deploy-prometheus infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts argocd/install ## Deploy full observability stack (Kind)
 	@echo "✅ Full observability stack deployed"
 
 infra/deploy-gke: infra/setup ## Deploy full observability stack (GKE)
@@ -465,6 +465,7 @@ infra/deploy-gke: infra/setup ## Deploy full observability stack (GKE)
 	@$(MAKE) infra/deploy-loki
 	@$(MAKE) infra/deploy-tempo
 	@$(MAKE) infra/deploy-alerts
+	@$(MAKE) argocd/install
 	@echo "✅ Full observability stack deployed for GKE"
 
 infra/status: ## Show infra pods status
@@ -477,6 +478,7 @@ infra/resources: ## Show infra node resource utilization
 
 infra/cleanup: ## Remove observability stack
 	@echo "🧹 Cleaning up observability stack..."
+	@$(MAKE) argocd/uninstall
 	@helm uninstall loki -n infra 2>/dev/null || true
 	@helm uninstall tempo -n infra 2>/dev/null || true
 	@helm uninstall prometheus -n infra 2>/dev/null || true
@@ -484,6 +486,70 @@ infra/cleanup: ## Remove observability stack
 	@kubectl delete -f k8s/infra/nats.yaml 2>/dev/null || true
 	@kubectl delete -f k8s/infra/alerting-rules.yaml 2>/dev/null || true
 	@echo "✅ Cleanup complete"
+
+# =============================================================================
+# ArgoCD
+# =============================================================================
+argocd/install: ## Install ArgoCD
+	@echo "🚀 Installing ArgoCD..."
+	@kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl apply -n infra -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+	@kubectl apply -f k8s/infra/argocd/install.yaml
+	@echo "🔧 Applying node selectors and tolerations..."
+	@kubectl patch deployment argocd-server -n infra -p '{"spec":{"template":{"spec":{"nodeSelector":{"node-type":"infra"},"tolerations":[{"key":"workload","operator":"Equal","value":"infra","effect":"NoSchedule"}]}}}}'
+	@kubectl patch deployment argocd-repo-server -n infra -p '{"spec":{"template":{"spec":{"nodeSelector":{"node-type":"infra"},"tolerations":[{"key":"workload","operator":"Equal","value":"infra","effect":"NoSchedule"}]}}}}'
+	@kubectl patch deployment argocd-redis -n infra -p '{"spec":{"template":{"spec":{"nodeSelector":{"node-type":"infra"},"tolerations":[{"key":"workload","operator":"Equal","value":"infra","effect":"NoSchedule"}]}}}}'
+	@kubectl patch deployment argocd-dex-server -n infra -p '{"spec":{"template":{"spec":{"nodeSelector":{"node-type":"infra"},"tolerations":[{"key":"workload","operator":"Equal","value":"infra","effect":"NoSchedule"}]}}}}'
+	@kubectl patch deployment argocd-notifications-controller -n infra -p '{"spec":{"template":{"spec":{"nodeSelector":{"node-type":"infra"},"tolerations":[{"key":"workload","operator":"Equal","value":"infra","effect":"NoSchedule"}]}}}}'
+	@kubectl patch deployment argocd-applicationset-controller -n infra -p '{"spec":{"template":{"spec":{"nodeSelector":{"node-type":"infra"},"tolerations":[{"key":"workload","operator":"Equal","value":"infra","effect":"NoSchedule"}]}}}}'
+	@kubectl patch statefulset argocd-application-controller -n infra -p '{"spec":{"template":{"spec":{"nodeSelector":{"node-type":"infra"},"tolerations":[{"key":"workload","operator":"Equal","value":"infra","effect":"NoSchedule"}]}}}}'
+	@echo "⏳ Waiting for ArgoCD to be ready..."
+	@kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n infra
+	@echo "✅ ArgoCD installed successfully"
+	@echo ""
+	@echo "Access ArgoCD:"
+	@echo "  URL: http://localhost:30080"
+	@echo "  Username: admin"
+	@echo "  Password: Run 'make argocd/password'"
+
+argocd/password: ## Get ArgoCD admin password
+	@echo "🔑 ArgoCD Admin Password:"
+	@kubectl -n infra get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+	@echo ""
+
+argocd/login: ## Login to ArgoCD CLI
+	@echo "🔐 Logging into ArgoCD..."
+	@argocd login localhost:30080 --username admin --password $$(kubectl -n infra get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d) --insecure
+
+argocd/deploy-apps: ## Deploy ArgoCD applications
+	@echo "📦 Deploying ArgoCD applications..."
+	@kubectl apply -f k8s/infra/argocd/application-grud.yaml
+	@kubectl apply -f k8s/infra/argocd/application-infra.yaml
+	@echo "✅ ArgoCD applications deployed"
+
+argocd/status: ## Show ArgoCD applications status
+	@echo "📊 ArgoCD Applications Status:"
+	@kubectl get applications -n infra
+	@echo ""
+	@echo "Pods in infra namespace:"
+	@kubectl get pods -n infra
+
+argocd/sync: ## Sync all ArgoCD applications
+	@echo "🔄 Syncing ArgoCD applications..."
+	@argocd app sync grud-app
+	@argocd app sync monitoring-stack
+	@argocd app sync nats
+
+argocd/ui: ## Open ArgoCD UI
+	@echo "🌐 Opening ArgoCD UI..."
+	@open http://localhost:30080
+
+argocd/uninstall: ## Uninstall ArgoCD
+	@echo "🗑️  Uninstalling ArgoCD..."
+	@kubectl delete -f k8s/infra/argocd/application-grud.yaml 2>/dev/null || true
+	@kubectl delete -f k8s/infra/argocd/application-infra.yaml 2>/dev/null || true
+	@kubectl delete -n infra -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml 2>/dev/null || true
+	@echo "✅ ArgoCD uninstalled"
 
 # =============================================================================
 # Secret Management
@@ -547,6 +613,14 @@ help: ## Show this help
 	@echo "  make infra/deploy       - Deploy full observability stack"
 	@echo "  make infra/status       - Show infra pods status"
 	@echo "  make infra/cleanup      - Remove observability stack"
+	@echo ""
+	@echo "ArgoCD:"
+	@echo "  make argocd/install     - Install ArgoCD"
+	@echo "  make argocd/password    - Get ArgoCD admin password"
+	@echo "  make argocd/deploy-apps - Deploy ArgoCD applications"
+	@echo "  make argocd/status      - Show ArgoCD applications status"
+	@echo "  make argocd/ui          - Open ArgoCD UI"
+	@echo "  make argocd/uninstall   - Uninstall ArgoCD"
 	@echo ""
 	@echo "Secret Management:"
 	@echo "  make secrets/generate-kind - Generate secrets for Kind"
