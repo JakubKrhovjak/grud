@@ -1,0 +1,83 @@
+# =============================================================================
+# eksctl Cluster Configuration
+# =============================================================================
+# Mirrors GKE node pool architecture: system, infra, app pools
+# Usage:
+#   eksctl create cluster -f eksctl-config.yaml
+#   eksctl delete cluster -f eksctl-config.yaml
+# =============================================================================
+
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: grud-cluster
+  region: eu-central-1
+  version: "1.31"
+
+# VPC configuration (similar to GKE VPC setup)
+vpc:
+  cidr: 10.0.0.0/16
+  nat:
+    gateway: Single
+
+# IAM OIDC provider (equivalent to GKE Workload Identity)
+iam:
+  withOIDC: true
+
+# =============================================================================
+# Node Groups - mirrors GKE node pool strategy
+# =============================================================================
+
+managedNodeGroups:
+  # System pool - kube-system components (NO TAINT)
+  # Equivalent to GKE system-pool (e2-medium, 2 nodes, stable)
+  - name: system-pool
+    instanceType: t3.small
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    volumeSize: 20
+    labels:
+      node-type: system
+    tags:
+      nodegroup-role: system
+    iam:
+      withAddonPolicies:
+        ebs: true
+
+  # Infra pool - monitoring stack (Prometheus, Grafana, Loki, Tempo, NATS)
+  # Equivalent to GKE infra-pool (e2-standard-4, 2 nodes, spot)
+  - name: infra-pool
+    instanceType: t3.medium
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    volumeSize: 20
+    spot: true
+    labels:
+      node-type: infra
+    taints:
+      - key: workload
+        value: infra
+        effect: NoSchedule
+    tags:
+      nodegroup-role: infra
+
+  # App pool - application workloads (student-service, project-service)
+  # Equivalent to GKE app-pool (e2-medium, autoscaling 1-4, spot)
+  - name: app-pool
+    instanceType: t3.small
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 4
+    volumeSize: 20
+    spot: true
+    labels:
+      node-type: app
+    taints:
+      - key: workload
+        value: app
+        effect: NoSchedule
+    tags:
+      nodegroup-role: app

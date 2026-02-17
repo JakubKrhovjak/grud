@@ -41,6 +41,11 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/.terraform.lock.hcl
+terraform-aws/.terraform/
+terraform-aws/*.tfstate
+terraform-aws/*.tfstate.*
+terraform-aws/.terraform.lock.hcl
+terraform/tfplan
 
 # Personal notes
 k8s/infra/infra.md
