@@ -181,7 +181,7 @@ gke/connect: ## Connect to GKE cluster via Connect Gateway
 	@gcloud container fleet memberships get-credentials $(GKE_CLUSTER) \
 		--location=$(GCP_REGION) \
 		--project=$(GCP_PROJECT)
-	@echo "✅ Connected to $(GKE_CLUSTER) via Connect Gateway"
+	@echo "✅ Connected to $(GKE_CLUSTER) via Connect Ga teway"
 
 gke/build: version/bump ## Build and push images to Artifact Registry with auto-incremented VERSION
 	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
@@ -304,6 +304,82 @@ gke/gateway-status: ## Show Gateway and HTTPRoute status
 	@echo ""
 	@echo "=== Gateway Details ==="
 	@kubectl describe gateway grud-gateway -n apps | tail -20
+
+# =============================================================================
+# EKS Cluster (AWS)
+# =============================================================================
+AWS_REGION := eu-central-1
+AWS_ACCOUNT_ID := 570617543021
+EKS_CLUSTER := grud-test
+EKS_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+
+eks/ecr-setup: ## Create ECR repositories
+	@echo "📦 Creating ECR repositories..."
+	@aws ecr create-repository --repository-name grud/student-service --region $(AWS_REGION) 2>/dev/null || echo "  ⚠️  grud/student-service already exists"
+	@aws ecr create-repository --repository-name grud/project-service --region $(AWS_REGION) 2>/dev/null || echo "  ⚠️  grud/project-service already exists"
+	@aws ecr create-repository --repository-name grud/admin-panel --region $(AWS_REGION) 2>/dev/null || echo "  ⚠️  grud/admin-panel already exists"
+	@echo "✅ ECR repositories ready"
+
+eks/ecr-login: ## Login to ECR
+	@echo "🔐 Logging into ECR..."
+	@aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(EKS_REGISTRY)
+	@echo "✅ ECR login successful"
+
+eks/build: version/bump eks/ecr-login ## Build and push images to ECR
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📦 Building and pushing images to ECR (linux/amd64)..."; \
+	echo "📌 Version: $$NEW_VERSION"; \
+	echo "🔨 Building student-service..."; \
+	KO_DOCKER_REPO=$(EKS_REGISTRY)/grud/student-service ko build --bare -t $$NEW_VERSION -t latest --platform=linux/amd64 ./services/student-service/cmd/student-service; \
+	echo "🔨 Building project-service..."; \
+	KO_DOCKER_REPO=$(EKS_REGISTRY)/grud/project-service ko build --bare -t $$NEW_VERSION -t latest --platform=linux/amd64 ./services/project-service/cmd/project-service; \
+	echo "🔨 Building admin-panel..."; \
+	docker build --platform=linux/amd64 -t $(EKS_REGISTRY)/grud/admin-panel:$$NEW_VERSION -t $(EKS_REGISTRY)/grud/admin-panel:latest services/admin; \
+	docker push $(EKS_REGISTRY)/grud/admin-panel:$$NEW_VERSION; \
+	docker push $(EKS_REGISTRY)/grud/admin-panel:latest; \
+	echo "✅ Images pushed to ECR with tag: $$NEW_VERSION"
+
+eks/update-version: ## Update image tags in values-eks.yaml (only ECR images, not postgres)
+	@NEW_VERSION=$$(cat $(VERSION_FILE)); \
+	echo "📝 Updating image tags to $$NEW_VERSION in values-eks.yaml..."; \
+	sed -i.bak '/ecr\..*amazonaws\.com/{n;s/tag: .*/tag: "'"$$NEW_VERSION"'"/;}' k8s/apps/values-eks.yaml; \
+	rm k8s/apps/values-eks.yaml.bak 2>/dev/null || true; \
+	echo "✅ Updated values-eks.yaml with version $$NEW_VERSION"
+
+eks/deploy: ## Deploy to EKS with Helm
+	@echo "🚀 Deploying to EKS with Helm..."
+	@helm upgrade --install apps k8s/apps \
+		-n apps --create-namespace \
+		-f k8s/apps/values-eks.yaml \
+		--wait
+	@echo "✅ Deployed to EKS"
+
+eks/build-deploy: eks/ecr-setup eks/build eks/update-version eks/deploy ## Full EKS build and deploy
+
+eks/status: ## Show EKS cluster status
+	@echo "📋 EKS Cluster Status"
+	@echo ""
+	@echo "Nodes:"
+	@kubectl get nodes -o wide
+	@echo ""
+	@echo "Deployments:"
+	@kubectl get deployments -n apps
+	@echo ""
+	@echo "Pods:"
+	@kubectl get pods -n apps -o wide
+	@echo ""
+	@echo "Services:"
+	@kubectl get services -n apps
+
+eks/clean: ## Clean uninstall from EKS
+	@echo "🧹 Cleaning apps namespace..."
+	@helm uninstall apps -n apps --wait 2>/dev/null || true
+	@echo "✅ Cleanup complete"
+
+eks/delete: ## Delete EKS cluster (stops all costs!)
+	@echo "🗑️  Deleting EKS cluster..."
+	@eksctl delete cluster --name $(EKS_CLUSTER) --region $(AWS_REGION)
+	@echo "✅ EKS cluster deleted"
 
 # =============================================================================
 # Terraform

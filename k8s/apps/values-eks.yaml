@@ -17,8 +17,8 @@ studentService:
   enabled: true
   replicaCount: 1
   image:
-    repository: europe-west1-docker.pkg.dev/rugged-abacus-483006-r5/grud/student-service
-    tag: "0.0.6"
+    repository: 570617543021.dkr.ecr.eu-central-1.amazonaws.com/grud/student-service
+    tag: "0.0.7"
     pullPolicy: Always
   resources:
     limits:
@@ -36,9 +36,9 @@ studentService:
     env: eks
     serverPort: "8080"
     grpcEndpoint: "project-service:50052"
-    natsUrl: ""
+    natsUrl: "nats://localhost:4222"
     natsSubject: "student-messages"
-    otelEndpoint: ""
+    otelEndpoint: "http://localhost:4318"
     corsOrigins:
       - "*"
   database:
@@ -57,8 +57,8 @@ projectService:
   enabled: true
   replicaCount: 1
   image:
-    repository: europe-west1-docker.pkg.dev/rugged-abacus-483006-r5/grud/project-service
-    tag: "0.0.6"
+    repository: 570617543021.dkr.ecr.eu-central-1.amazonaws.com/grud/project-service
+    tag: "0.0.7"
     pullPolicy: Always
   resources:
     limits:
@@ -74,9 +74,9 @@ projectService:
   config:
     env: eks
     grpcPort: "50052"
-    natsUrl: ""
+    natsUrl: "nats://localhost:4222"
     natsSubject: "student-messages"
-    otelEndpoint: ""
+    otelEndpoint: "http://localhost:4318"
   database:
     host: project-db.apps.svc.cluster.local
     port: "5432"
@@ -93,8 +93,8 @@ adminPanel:
   config:
     apiUrl: "http://student-service:8080"
   image:
-    repository: europe-west1-docker.pkg.dev/rugged-abacus-483006-r5/grud/admin-panel
-    tag: "0.0.8"
+    repository: 570617543021.dkr.ecr.eu-central-1.amazonaws.com/grud/admin-panel
+    tag: "0.0.7"
     pullPolicy: Always
   resources:
     limits:
