@@ -1,4 +1,4 @@
-.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/connect gke/deploy gke/status gke/full-deploy gke/ingress gke/resources gke/clean gke/prometheus gke/grafana tf/init tf/plan tf/apply tf/destroy tf/output tf/fmt tf/validate helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-gke infra/deploy-prometheus infra/deploy-prometheus-gke infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup secrets/generate-kind secrets/list-kind secrets/list-gke secrets/view-gke help
+.PHONY: build build-student build-project version test kind/setup kind/deploy kind/status kind/wait kind/stop kind/start kind/cleanup gke/auth gke/connect gke/deploy gke/status gke/full-deploy gke/ingress gke/resources gke/clean gke/prometheus gke/grafana tf/init tf/plan tf/apply tf/destroy tf/output tf/fmt tf/validate tf-aws/init tf-aws/plan tf-aws/apply tf-aws/destroy tf-aws/output helm/template-kind helm/template-gke helm/uninstall infra/setup infra/deploy infra/deploy-gke infra/deploy-prometheus infra/deploy-prometheus-gke infra/deploy-alloy infra/deploy-nats infra/deploy-loki infra/deploy-tempo infra/deploy-alerts infra/status infra/cleanup secrets/generate-kind secrets/list-kind secrets/list-gke secrets/view-gke help
 
 # =============================================================================
 # Build Configuration
@@ -310,7 +310,7 @@ gke/gateway-status: ## Show Gateway and HTTPRoute status
 # =============================================================================
 AWS_REGION := eu-central-1
 AWS_ACCOUNT_ID := 570617543021
-EKS_CLUSTER := grud-test
+EKS_CLUSTER := grud-cluster
 EKS_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 eks/ecr-setup: ## Create ECR repositories
@@ -376,13 +376,39 @@ eks/clean: ## Clean uninstall from EKS
 	@helm uninstall apps -n apps --wait 2>/dev/null || true
 	@echo "✅ Cleanup complete"
 
-eks/delete: ## Delete EKS cluster (stops all costs!)
-	@echo "🗑️  Deleting EKS cluster..."
-	@eksctl delete cluster --name $(EKS_CLUSTER) --region $(AWS_REGION)
-	@echo "✅ EKS cluster deleted"
+eks/delete: tf-aws/destroy ## Delete EKS cluster via Terraform (stops all costs!)
 
 # =============================================================================
-# Terraform
+# Terraform AWS (EKS + RDS)
+# =============================================================================
+TF_AWS_DIR := terraform-aws
+
+tf-aws/init: ## Initialize Terraform AWS
+	@echo "Initializing Terraform AWS..."
+	@cd $(TF_AWS_DIR) && terraform init
+	@echo "Terraform AWS initialized"
+
+tf-aws/plan: ## Plan Terraform AWS changes
+	@echo "Planning Terraform AWS changes..."
+	@cd $(TF_AWS_DIR) && terraform plan
+
+tf-aws/apply: ## Apply Terraform AWS (EKS + RDS)
+	@echo "Stage 1: Bootstrap (VPC, EKS) - skip k8s providers..."
+	@cd $(TF_AWS_DIR) && terraform apply -var="skip_kubernetes_provider=true" -auto-approve
+	@echo "Stage 2: Full apply with k8s providers..."
+	@cd $(TF_AWS_DIR) && terraform apply -auto-approve
+	@echo "Terraform AWS applied"
+
+tf-aws/destroy: ## Destroy all AWS resources (EKS + RDS)
+	@echo "Destroying Terraform AWS resources..."
+	@cd $(TF_AWS_DIR) && terraform destroy
+	@echo "Terraform AWS destroyed"
+
+tf-aws/output: ## Show Terraform AWS outputs
+	@cd $(TF_AWS_DIR) && terraform output
+
+# =============================================================================
+# Terraform GCP (GKE)
 # =============================================================================
 TF_DIR := terraform
 

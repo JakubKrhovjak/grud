@@ -1,10 +1,18 @@
 # =============================================================================
-# EKS Cluster (equivalent to GKE cluster in terraform/gke.tf)
+# [3/6] EKS CLUSTER
 # =============================================================================
-# Node Pool Strategy (mirrors GKE):
-#   - system-pool: kube-system components (NO TAINT)
-#   - infra-pool: monitoring stack (TAINT: workload=infra)
-#   - app-pool: application workloads (TAINT: workload=app, autoscaling)
+# Creates the Kubernetes cluster with three node pools.
+#
+# What gets created:
+#   - EKS control plane (managed by AWS, ~$0.10/h)
+#   - system-pool: 1x t3.small ON_DEMAND — kube-system (CoreDNS, kube-proxy, etc.)
+#   - app-pool:    1x t3.small SPOT      — app workloads (taint: workload=app)
+#   - infra-pool:  1x t3.medium SPOT     — NATS (taint: workload=infra)
+#   - Cluster addons: CoreDNS, kube-proxy, VPC-CNI
+#   - IRSA enabled (IAM Roles for Service Accounts)
+#
+# Depends on: [2/6] vpc.tf (VPC, subnets)
+# Used by:    [4/6] rds.tf (node security group for DB access)
 # =============================================================================
 
 module "eks" {
@@ -19,10 +27,7 @@ module "eks" {
 
   cluster_endpoint_public_access = true
 
-  # IRSA - equivalent to GKE Workload Identity
   enable_irsa = true
-
-  # Cluster addons
   cluster_addons = {
     coredns = {
       most_recent = true
@@ -35,20 +40,14 @@ module "eks" {
     }
   }
 
-  # ==========================================================================
-  # Node Groups - mirrors GKE node pool strategy
-  # ==========================================================================
   eks_managed_node_groups = {
-
-    # System pool - kube-system components (NO TAINT)
-    # Equivalent to GKE system-pool (e2-medium, 2 nodes, stable)
     system-pool = {
       instance_types = [var.system_instance_type]
       capacity_type  = "ON_DEMAND"
 
-      min_size     = 2
-      max_size     = 2
-      desired_size = 2
+      min_size     = 1
+      max_size     = 1
+      desired_size = 1
 
       disk_size = var.disk_size_gb
 
@@ -57,40 +56,13 @@ module "eks" {
       }
     }
 
-    # Infra pool - monitoring stack (Prometheus, Grafana, Loki, Tempo, NATS)
-    # Equivalent to GKE infra-pool (e2-standard-4, 2 nodes, spot)
-    infra-pool = {
-      instance_types = [var.infra_instance_type]
-      capacity_type  = "SPOT"
-
-      min_size     = 2
-      max_size     = 2
-      desired_size = 2
-
-      disk_size = var.disk_size_gb
-
-      labels = {
-        "node-type" = "infra"
-      }
-
-      taints = [
-        {
-          key    = "workload"
-          value  = "infra"
-          effect = "NO_SCHEDULE"
-        }
-      ]
-    }
-
-    # App pool - application workloads (student-service, project-service)
-    # Equivalent to GKE app-pool (e2-medium, autoscaling 1-4, spot)
     app-pool = {
       instance_types = [var.app_instance_type]
       capacity_type  = "SPOT"
 
-      min_size     = var.app_min_size
-      max_size     = var.app_max_size
-      desired_size = var.app_min_size
+      min_size     = 1
+      max_size     = 1
+      desired_size = 1
 
       disk_size = var.disk_size_gb
 
@@ -102,6 +74,29 @@ module "eks" {
         {
           key    = "workload"
           value  = "app"
+          effect = "NO_SCHEDULE"
+        }
+      ]
+    }
+
+    infra-pool = {
+      instance_types = [var.infra_instance_type]
+      capacity_type  = "SPOT"
+
+      min_size     = 1
+      max_size     = 1
+      desired_size = 1
+
+      disk_size = var.disk_size_gb
+
+      labels = {
+        "node-type" = "infra"
+      }
+
+      taints = [
+        {
+          key    = "workload"
+          value  = "infra"
           effect = "NO_SCHEDULE"
         }
       ]

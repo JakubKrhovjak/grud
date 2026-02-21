@@ -1,18 +1,40 @@
+# =============================================================================
+# [1/6] PROVIDERS & BACKEND
+# =============================================================================
+# Terraform version, required providers, and provider configuration.
+# This file is processed first — it tells Terraform what plugins to download.
+#
+# Providers used:
+#   - aws:        VPC, EKS, RDS, security groups
+#   - kubernetes: (reserved for future K8s resources managed by Terraform)
+#   - helm:       (reserved for future Helm releases managed by Terraform)
+#   - postgresql: creates databases and users on the RDS instance (databases.tf)
+#
+# State is stored in S3 bucket. Bucket must be created before terraform init.
+# Create it with: aws s3 mb s3://grud-terraform-state --region eu-central-1
+# =============================================================================
+
 terraform {
   required_version = ">= 1.14.0"
 
-  # For testing, use local state. Switch to S3 backend for production.
-  # backend "s3" {
-  #   bucket = "grud-terraform-state"
-  #   key    = "eks/terraform.tfstate"
-  #   region = "eu-central-1"
-  # }
+  backend "s3" {
+    bucket = "grud-terraform-state"
+    key    = "eks/terraform.tfstate"
+    region = "eu-central-1"
+  }
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    postgresql = {
+      source  = "cyrilgdn/postgresql"
+      version = "~> 1.22"
+    }
+
+
+    //-------------
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.25"
@@ -21,6 +43,7 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.12"
     }
+
   }
 }
 

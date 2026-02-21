@@ -36,16 +36,16 @@ studentService:
     env: eks
     serverPort: "8080"
     grpcEndpoint: "project-service:50052"
-    natsUrl: "nats://localhost:4222"
+    natsUrl: "nats://nats.infra.svc.cluster.local:4222"
     natsSubject: "student-messages"
     otelEndpoint: "http://localhost:4318"
     corsOrigins:
       - "*"
   database:
-    host: student-db.apps.svc.cluster.local
+    host: "" # set to RDS endpoint after terraform apply
     port: "5432"
     name: university
-    sslMode: disable
+    sslMode: require
     secretName: student-db-app
   auth:
     jwtSecret: "eks-test-jwt-secret-change-in-production"
@@ -74,14 +74,14 @@ projectService:
   config:
     env: eks
     grpcPort: "50052"
-    natsUrl: "nats://localhost:4222"
+    natsUrl: "nats://nats.infra.svc.cluster.local:4222"
     natsSubject: "student-messages"
     otelEndpoint: "http://localhost:4318"
   database:
-    host: project-db.apps.svc.cluster.local
+    host: "" # set to RDS endpoint after terraform apply
     port: "5432"
     name: projects
-    sslMode: disable
+    sslMode: require
     secretName: project-db-app
   serviceAccount:
     gcpServiceAccount: ""
@@ -112,53 +112,12 @@ adminPanel:
     port: 80
     nodePort: 30082
 
-# Local PostgreSQL databases (like Kind)
+# In-cluster PostgreSQL disabled — using AWS RDS
 studentDb:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: postgres
-    tag: "15-alpine"
-  resources:
-    limits:
-      cpu: 250m
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  storage:
-    size: 1Gi
-    storageClassName: gp2
-  credentials:
-    database: university
-    username: student_user
-    password: student_password
+  enabled: false
 
-# Project Database
 projectDb:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: postgres
-    tag: "15-alpine"
-  resources:
-    limits:
-      cpu: 250m
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-  nodeSelector: {}
-  tolerations: []
-  storage:
-    size: 1Gi
-    storageClassName: gp2
-  credentials:
-    database: projects
-    username: project_user
-    password: project_password
+  enabled: false
 
 # Secrets - simple Kubernetes secrets for testing
 secrets:

@@ -1,5 +1,17 @@
 # =============================================================================
-# VPC Network (equivalent to GKE VPC in terraform/vpc.tf)
+# [2/6] VPC NETWORK
+# =============================================================================
+# Creates the VPC where EKS and RDS live.
+#
+# What gets created:
+#   - VPC (10.0.0.0/16)
+#   - 2 private subnets (10.0.1.0/24, 10.0.2.0/24) — EKS nodes + RDS
+#   - 2 public subnets (10.0.101.0/24, 10.0.102.0/24) — NAT Gateway, load balancers
+#   - NAT Gateway (single, for cost savings) — allows private subnets to reach internet
+#   - Subnet tags for K8s service discovery (ELB/internal-ELB)
+#
+# Depends on: [1/6] versions.tf (AWS provider)
+# Used by:    [3/6] eks.tf, [4/6] rds.tf
 # =============================================================================
 
 data "aws_availability_zones" "available" {
