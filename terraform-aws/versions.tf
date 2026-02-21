@@ -8,7 +8,7 @@
 #   - aws:        VPC, EKS, RDS, security groups
 #   - kubernetes: (reserved for future K8s resources managed by Terraform)
 #   - helm:       (reserved for future Helm releases managed by Terraform)
-#   - postgresql: creates databases and users on the RDS instance (databases.tf)
+#   - postgresql: not used — DB init via K8s Job (k8s/jobs/rds-init.yaml)
 #
 # State is stored in S3 bucket. Bucket must be created before terraform init.
 # Create it with: aws s3 mb s3://grud-terraform-state --region eu-central-1
@@ -28,13 +28,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    postgresql = {
-      source  = "cyrilgdn/postgresql"
-      version = "~> 1.22"
-    }
-
-
-    //-------------
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.25"

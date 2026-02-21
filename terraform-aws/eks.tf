@@ -27,6 +27,9 @@ module "eks" {
 
   cluster_endpoint_public_access = true
 
+  # Allow current IAM user to manage the cluster
+  enable_cluster_creator_admin_permissions = true
+
   enable_irsa = true
   cluster_addons = {
     coredns = {

@@ -4,14 +4,16 @@
 # Creates the managed PostgreSQL instance.
 #
 # What gets created:
-#   - DB subnet group (private subnets from VPC)
-#   - Security group allowing port 5432 from EKS nodes only
+#   - DB subnet group (private subnets)
+#   - Security group allowing port 5432 from EKS nodes
 #   - RDS instance: db.t4g.micro, PostgreSQL 15, 20GB gp3, single-AZ
 #   - No backups, no deletion protection (dev/test)
-#   - Master user: grud_admin (databases + app users created in [5/6])
+#   - Master user: grud_admin
+#
+# Databases and users are created via K8s Job (k8s/jobs/rds-init.yaml)
+# because RDS is in private subnets, unreachable from local machine.
 #
 # Depends on: [2/6] vpc.tf (subnets), [3/6] eks.tf (node security group)
-# Used by:    [5/6] databases.tf (postgresql provider connects here)
 # =============================================================================
 
 resource "aws_db_subnet_group" "main" {
@@ -65,11 +67,11 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  publicly_accessible    = false
-  multi_az               = false
+  publicly_accessible     = false
+  multi_az                = false
   backup_retention_period = 0
-  skip_final_snapshot    = true
-  deletion_protection    = false
+  skip_final_snapshot     = true
+  deletion_protection     = false
 
   tags = {
     Environment = "test"

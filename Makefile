@@ -390,13 +390,13 @@ tf-aws/init: ## Initialize Terraform AWS
 
 tf-aws/plan: ## Plan Terraform AWS changes
 	@echo "Planning Terraform AWS changes..."
-	@cd $(TF_AWS_DIR) && terraform plan
+	@cd $(TF_AWS_DIR) && terraform plan -var="skip_kubernetes_provider=true"
 
 tf-aws/apply: ## Apply Terraform AWS (EKS + RDS)
-	@echo "Stage 1: Bootstrap (VPC, EKS) - skip k8s providers..."
-	@cd $(TF_AWS_DIR) && terraform apply -var="skip_kubernetes_provider=true" -auto-approve
+	@echo "Stage 1: Bootstrap (VPC, EKS, RDS) - skip k8s providers..."
+	@cd $(TF_AWS_DIR) && terraform apply -var="skip_kubernetes_provider=true"
 	@echo "Stage 2: Full apply with k8s providers..."
-	@cd $(TF_AWS_DIR) && terraform apply -auto-approve
+	@cd $(TF_AWS_DIR) && terraform apply
 	@echo "Terraform AWS applied"
 
 tf-aws/destroy: ## Destroy all AWS resources (EKS + RDS)
