@@ -45,6 +45,7 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
+    Name        = "${var.cluster_name}-rds"
     Environment = "test"
     Project     = "grud"
   }

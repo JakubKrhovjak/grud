@@ -42,7 +42,7 @@ studentService:
     corsOrigins:
       - "*"
   database:
-    host: "" # set to RDS endpoint after terraform apply
+    host: "grud-cluster-postgres.ctgi2qomwq5x.eu-central-1.rds.amazonaws.com"
     port: "5432"
     name: university
     sslMode: require
@@ -78,7 +78,7 @@ projectService:
     natsSubject: "student-messages"
     otelEndpoint: "http://localhost:4318"
   database:
-    host: "" # set to RDS endpoint after terraform apply
+    host: "grud-cluster-postgres.ctgi2qomwq5x.eu-central-1.rds.amazonaws.com"
     port: "5432"
     name: projects
     sslMode: require
@@ -121,9 +121,9 @@ projectDb:
 
 # Secrets - simple Kubernetes secrets for testing
 secrets:
-  createKubernetesSecrets: false
+  createKubernetesSecrets: true
   useExternalSecrets: false
-  jwtSecret: ""
+  jwtSecret: "eks-test-jwt-secret-change-in-production"
   gcp:
     projectId: ""
     clusterLocation: ""
@@ -134,14 +134,14 @@ secrets:
 
 databases:
   student:
-    username: ""
-    password: ""
+    username: "student_user"
+    password: "student1234"
     database: "university"
-    host: ""
+    host: "grud-cluster-postgres.ctgi2qomwq5x.eu-central-1.rds.amazonaws.com"
     port: 5432
   project:
-    username: ""
-    password: ""
+    username: "project_user"
+    password: "project1234"
     database: "projects"
-    host: ""
+    host: "grud-cluster-postgres.ctgi2qomwq5x.eu-central-1.rds.amazonaws.com"
     port: 5432
