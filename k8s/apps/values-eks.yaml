@@ -29,9 +29,12 @@ studentService:
       memory: 128Mi
   hpa:
     enabled: false
-  # No nodeSelector/tolerations - schedule on any node (system-pool)
   nodeSelector: {}
-  tolerations: []
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "app"
+      effect: "NoSchedule"
   config:
     env: eks
     serverPort: "8080"
@@ -46,7 +49,7 @@ studentService:
     port: "5432"
     name: university
     sslMode: require
-    secretName: student-db-app
+    secretName: student-db-secret
   auth:
     jwtSecret: "eks-test-jwt-secret-change-in-production"
   serviceAccount:
@@ -70,7 +73,11 @@ projectService:
   hpa:
     enabled: false
   nodeSelector: {}
-  tolerations: []
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "app"
+      effect: "NoSchedule"
   config:
     env: eks
     grpcPort: "50052"
@@ -82,7 +89,7 @@ projectService:
     port: "5432"
     name: projects
     sslMode: require
-    secretName: project-db-app
+    secretName: project-db-secret
   serviceAccount:
     gcpServiceAccount: ""
 
@@ -104,7 +111,11 @@ adminPanel:
       cpu: 50m
       memory: 64Mi
   nodeSelector: {}
-  tolerations: []
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "app"
+      effect: "NoSchedule"
   ingress:
     enabled: false
   service:

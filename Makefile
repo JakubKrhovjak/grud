@@ -313,6 +313,38 @@ AWS_ACCOUNT_ID := 570617543021
 EKS_CLUSTER := grud-cluster
 EKS_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
+eks/infra: ## Create full EKS infrastructure (Terraform + kubeconfig + RDS init + NATS)
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "1/5 Terraform init..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@cd $(TF_AWS_DIR) && terraform init
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "2/5 Terraform apply (VPC + EKS + RDS)..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@cd $(TF_AWS_DIR) && terraform apply -var="skip_kubernetes_provider=true"
+	@cd $(TF_AWS_DIR) && terraform apply
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "3/5 Configuring kubectl..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@aws eks update-kubeconfig --region $(AWS_REGION) --name $(EKS_CLUSTER)
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "4/5 Initializing RDS databases..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@kubectl create namespace apps --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl delete job rds-init -n apps --ignore-not-found
+	@kubectl apply -f k8s/jobs/rds-init.yaml
+	@kubectl wait --for=condition=complete job/rds-init -n apps --timeout=120s
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "5/5 Deploying NATS..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl apply -f k8s/infra/nats.yaml
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "EKS infrastructure ready!"
+	@echo "Next: make eks/deploy"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 eks/ecr-setup: ## Create ECR repositories
 	@echo "📦 Creating ECR repositories..."
 	@aws ecr create-repository --repository-name grud/student-service --region $(AWS_REGION) 2>/dev/null || echo "  ⚠️  grud/student-service already exists"
