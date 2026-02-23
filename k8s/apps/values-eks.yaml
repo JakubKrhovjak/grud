@@ -10,7 +10,7 @@ cloudSql:
   enabled: false
 
 ingress:
-  enabled: false
+  enabled: true
 
 # Student Service
 studentService:
@@ -119,9 +119,8 @@ adminPanel:
   ingress:
     enabled: false
   service:
-    type: NodePort
+    type: ClusterIP
     port: 80
-    nodePort: 30082
 
 # In-cluster PostgreSQL disabled — using AWS RDS
 studentDb:

@@ -35,3 +35,8 @@ output "rds_port" {
   description = "RDS PostgreSQL port"
   value       = aws_db_instance.main.port
 }
+
+output "lb_controller_role_arn" {
+  description = "IAM role ARN for AWS Load Balancer Controller"
+  value       = aws_iam_role.lb_controller.arn
+}

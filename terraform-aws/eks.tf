@@ -41,6 +41,9 @@ module "eks" {
     vpc-cni = {
       most_recent = true
     }
+    amazon-cloudwatch-observability = {
+      most_recent = true
+    }
   }
 
   eks_managed_node_groups = {
@@ -56,6 +59,10 @@ module "eks" {
 
       labels = {
         "node-type" = "system"
+      }
+
+      iam_role_additional_policies = {
+        CloudWatchAgent = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
       }
     }
 
@@ -80,6 +87,10 @@ module "eks" {
           effect = "NO_SCHEDULE"
         }
       ]
+
+      iam_role_additional_policies = {
+        CloudWatchAgent = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+      }
     }
 
     infra-pool = {
@@ -103,6 +114,10 @@ module "eks" {
           effect = "NO_SCHEDULE"
         }
       ]
+
+      iam_role_additional_policies = {
+        CloudWatchAgent = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+      }
     }
   }
 

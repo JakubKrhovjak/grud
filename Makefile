@@ -403,6 +403,14 @@ eks/status: ## Show EKS cluster status
 	@echo "Services:"
 	@kubectl get services -n apps
 
+eks/ingress: ## Show EKS Ingress status and ALB DNS
+	@echo "=== Ingress ==="
+	@kubectl get ingress -n apps
+	@echo ""
+	@echo "=== ALB DNS ==="
+	@kubectl get ingress -n apps -o jsonpath='{.items[*].status.loadBalancer.ingress[*].hostname}'
+	@echo ""
+
 eks/clean: ## Clean uninstall from EKS
 	@echo "🧹 Cleaning apps namespace..."
 	@helm uninstall apps -n apps --wait 2>/dev/null || true
