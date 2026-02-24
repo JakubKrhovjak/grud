@@ -30,6 +30,16 @@ module "eks" {
   # Allow current IAM user to manage the cluster
   enable_cluster_creator_admin_permissions = true
 
+  # Name tags for Security Groups (visible in AWS Console)
+  node_security_group_name = "${var.cluster_name}-node"
+  node_security_group_tags = {
+    "Name" = "${var.cluster_name}-node"
+  }
+  cluster_security_group_name = "${var.cluster_name}-cluster"
+  cluster_security_group_tags = {
+    "Name" = "${var.cluster_name}-cluster"
+  }
+
   enable_irsa = true
   cluster_addons = {
     coredns = {
