@@ -439,7 +439,7 @@ tf-aws/apply: ## Apply Terraform AWS (EKS + RDS)
 	@cd $(TF_AWS_DIR) && terraform apply
 	@echo "Terraform AWS applied"
 
-tf-aws/destroy: ## Destroy all AWS resources (EKS + RDS)
+tf-aws/destroy: ## Destroy all AWS resources (ACM cert + DNS preserved - not managed by TF)
 	@echo "Destroying Terraform AWS resources..."
 	@cd $(TF_AWS_DIR) && terraform destroy
 	@echo "Terraform AWS destroyed"

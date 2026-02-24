@@ -43,14 +43,5 @@ output "lb_controller_role_arn" {
 
 output "acm_certificate_arn" {
   description = "ACM certificate ARN for aws.grudapp.com (use in Ingress annotations)"
-  value       = aws_acm_certificate.main.arn
-}
-
-output "acm_validation_record" {
-  description = "CNAME record to add to GCP Cloud DNS for ACM validation"
-  value = {
-    name  = tolist(aws_acm_certificate.main.domain_validation_options)[0].resource_record_name
-    type  = tolist(aws_acm_certificate.main.domain_validation_options)[0].resource_record_type
-    value = tolist(aws_acm_certificate.main.domain_validation_options)[0].resource_record_value
-  }
+  value       = data.aws_acm_certificate.main.arn
 }
