@@ -447,6 +447,16 @@ tf-aws/destroy: ## Destroy all AWS resources (ACM cert + DNS preserved - not man
 tf-aws/output: ## Show Terraform AWS outputs
 	@cd $(TF_AWS_DIR) && terraform output
 
+eks/db-tunnel: ## Port-forward to RDS via SSM (requires: brew install --cask session-manager-plugin)
+	@INSTANCE_ID=$$(aws ec2 describe-instances --region eu-central-1 \
+		--filters "Name=tag:eks:cluster-name,Values=grud-cluster" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text) && \
+	echo "Connecting to RDS via SSM (instance: $$INSTANCE_ID)..." && \
+	echo "Then connect: psql -h localhost -p 5432 -U student_user -d university" && \
+	aws ssm start-session --region eu-central-1 --target $$INSTANCE_ID \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters '{"host":["grud-cluster-postgres.ctgi2qomwq5x.eu-central-1.rds.amazonaws.com"],"portNumber":["5432"],"localPortNumber":["5432"]}'
+
 # =============================================================================
 # Terraform GCP (GKE)
 # =============================================================================
