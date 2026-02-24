@@ -73,6 +73,7 @@ module "eks" {
 
       iam_role_additional_policies = {
         CloudWatchAgent = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        SSM             = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       }
     }
 
@@ -100,6 +101,7 @@ module "eks" {
 
       iam_role_additional_policies = {
         CloudWatchAgent = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        SSM             = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       }
     }
 
@@ -127,6 +129,7 @@ module "eks" {
 
       iam_role_additional_policies = {
         CloudWatchAgent = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        SSM             = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       }
     }
   }
