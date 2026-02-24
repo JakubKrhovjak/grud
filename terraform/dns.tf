@@ -61,6 +61,24 @@ resource "google_dns_record_set" "argocd" {
   rrdatas      = [data.google_compute_global_address.ingress_ip.address]
 }
 
+# ACM certificate DNS validation for aws.grudapp.com
+resource "google_dns_record_set" "aws_acm_validation" {
+  name         = "_f4c406f3dbd2eca671fe91683eae0370.aws.${google_dns_managed_zone.grudapp.dns_name}"
+  managed_zone = google_dns_managed_zone.grudapp.name
+  type         = "CNAME"
+  ttl          = 300
+  rrdatas      = ["_a04fe083cd655460abf6a663261dabd8.jkddzztszm.acm-validations.aws."]
+}
+
+# AWS EKS subdomain - CNAME to ALB DNS
+resource "google_dns_record_set" "aws" {
+  name         = "aws.${google_dns_managed_zone.grudapp.dns_name}"
+  managed_zone = google_dns_managed_zone.grudapp.name
+  type         = "CNAME"
+  ttl          = 300
+  rrdatas      = ["k8s-grud-277f06d98e-1750345366.eu-central-1.elb.amazonaws.com."]
+}
+
 # =============================================================================
 # SSL Certificate (for legacy Ingress - keeping for backwards compatibility)
 # =============================================================================

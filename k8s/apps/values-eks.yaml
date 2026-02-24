@@ -11,6 +11,7 @@ cloudSql:
 
 ingress:
   enabled: true
+  certificateArn: "arn:aws:acm:eu-central-1:570617543021:certificate/bee348df-de02-45fb-a594-c94d5a57df50"
 
 # Student Service
 studentService:
