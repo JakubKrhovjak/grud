@@ -1,17 +1,10 @@
 # =============================================================================
 # Security Hub — Central Security Dashboard
 # =============================================================================
-# Aggregates findings from GuardDuty, Inspector, IAM Access Analyzer, etc.
-# Runs automated security checks against AWS best practices.
-# First 30 days free, then ~$1-3/month for small accounts.
-#
-# View findings: AWS Console → Security Hub → Findings / Security standards
+# Security Hub is enabled manually (persists across cluster destroy/create).
+# This data source verifies it's running. Findings visible in AWS Console.
 # =============================================================================
 
-resource "aws_securityhub_account" "main" {}
-
-resource "aws_securityhub_standards_subscription" "aws_best_practices" {
-  standards_arn = "arn:aws:securityhub:eu-central-1::standards/aws-foundational-security-best-practices/v/1.0.0"
-
-  depends_on = [aws_securityhub_account.main]
-}
+# Security Hub has no data source — just keep this file as documentation.
+# It was enabled via: aws securityhub enable-security-hub
+# Standards: AWS Foundational Security Best Practices
