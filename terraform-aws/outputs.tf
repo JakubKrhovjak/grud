@@ -45,3 +45,23 @@ output "acm_certificate_arn" {
   description = "ACM certificate ARN for aws.grudapp.com (use in Ingress annotations)"
   value       = data.aws_acm_certificate.main.arn
 }
+
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID (use in admin-create-user CLI command)"
+  value       = aws_cognito_user_pool.main.id
+}
+
+output "cognito_user_pool_arn" {
+  description = "Cognito User Pool ARN (paste into ingress-grafana-eks.yaml auth-idp-cognito)"
+  value       = aws_cognito_user_pool.main.arn
+}
+
+output "cognito_app_client_id" {
+  description = "Cognito App Client ID (paste into ingress-grafana-eks.yaml auth-idp-cognito)"
+  value       = aws_cognito_user_pool_client.alb.id
+}
+
+output "cognito_domain" {
+  description = "Cognito hosted UI domain (for reference)"
+  value       = "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.region}.amazoncognito.com"
+}

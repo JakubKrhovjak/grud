@@ -12,6 +12,14 @@ metadata:
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-central-1:570617543021:certificate/bee348df-de02-45fb-a594-c94d5a57df50
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/healthcheck-path: /grafana/api/health
+
+    # Cognito Zero Trust — ALB authenticates users before forwarding to Grafana
+    alb.ingress.kubernetes.io/auth-type: cognito
+    alb.ingress.kubernetes.io/auth-idp-cognito: '{"userPoolARN":"arn:aws:cognito-idp:eu-central-1:570617543021:userpool/eu-central-1_5JPG8HTfg","userPoolClientID":"4c59fkcaunmt675optltqon61a","userPoolDomain":"grud-cluster-auth"}'
+    alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
+    alb.ingress.kubernetes.io/auth-scope: "openid email profile"
+    alb.ingress.kubernetes.io/auth-session-cookie: AWSELBAuthSessionCookie
+    alb.ingress.kubernetes.io/auth-session-timeout: "3600"
 spec:
   ingressClassName: alb
   rules:
