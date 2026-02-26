@@ -30,6 +30,21 @@ module "eks" {
   # Allow current IAM user to manage the cluster
   enable_cluster_creator_admin_permissions = true
 
+  # GitHub Actions role - potrebuje admin pristup pro helm deploy
+  access_entries = {
+    github-actions = {
+      principal_arn = aws_iam_role.github_actions_deploy.arn
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
+  }
+
   # Name tags for Security Groups (visible in AWS Console)
   node_security_group_name = "${var.cluster_name}-node"
   node_security_group_tags = {
